@@ -8,8 +8,8 @@ NBType = Literal["multinomial", "bernoulli", "complement"]
 NBModels = Union[MultinomialNB, BernoulliNB, ComplementNB]
 
 def fit_naive_bayes_classifier(
-    x_train: np.ndarray | scipy.sparse, # Bow 或 TF-IDF，shape = (n_samples, n_features)
-    y_train: np.array, # 標籤向量，長度 = n_samples
+    x_train: np.ndarray | scipy.sparse.spmatrix, # Bow 或 TF-IDF，shape = (n_samples, n_features)
+    y_train: np.ndarray, # 標籤向量，長度 = n_samples
     model: NBType = "multinomial",
     alpha: float = 1.0, # 平滑參數
 ) -> NBModels:
@@ -29,7 +29,7 @@ def fit_naive_bayes_classifier(
 
 def predict_naive_bayes_classifier(
         clf: NBModels, # 用 fit_naive_nayes_classifier 訓練好的 model
-        x_test: np.ndarray|scipy.sparse # Bow 或 TF-IDF，shape = (n_samples, n_features)
+        x_test: np.ndarray|scipy.sparse.spmatrix # Bow 或 TF-IDF，shape = (n_samples, n_features)
 ) -> np.ndarray:
     """
     使用 naive bayes classifier 預測
