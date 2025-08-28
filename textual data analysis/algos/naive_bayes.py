@@ -1,11 +1,11 @@
-from typing import Literal, Union
+from typing import Literal
 import numpy as np
 import scipy
 from sklearn.naive_bayes import MultinomialNB, BernoulliNB, ComplementNB
 
 
 NBType = Literal["multinomial", "bernoulli", "complement"]
-NBModels = Union[MultinomialNB, BernoulliNB, ComplementNB]
+NBModels = MultinomialNB | BernoulliNB | ComplementNB
 
 def fit_naive_bayes_classifier(
     x_train: np.ndarray | scipy.sparse.spmatrix, # Bow 或 TF-IDF，shape = (n_samples, n_features)

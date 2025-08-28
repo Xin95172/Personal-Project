@@ -6,7 +6,7 @@ import pandas as pd
 def evaluate_metrics(
     y_true: np.ndarray, # true Labels
     y_pred: np.ndarray, # predicted results
-    labels: list = None, # ordinize labels
+    labels: list | None = None, # ordinize labels
 ) -> None:
     """
     輸出 classification report 和 confusion matrix
@@ -17,4 +17,8 @@ def evaluate_metrics(
     if labels:
         print("\n====== confusion matrix ======")
         cm = confusion_matrix(y_true, y_pred, labels = labels)
-        print(pd.DataFrame(cm, index = labels, columns = labels))
+        print(pd.DataFrame(
+            cm,
+            index = pd.Index(labels, name = "True"),
+            columns = pd.Index(labels, name = "Predicted")
+        ))
