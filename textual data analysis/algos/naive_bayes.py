@@ -8,7 +8,7 @@ NBType = Literal["multinomial", "bernoulli", "complement"]
 NBModels = Union[MultinomialNB, BernoulliNB, ComplementNB]
 
 def fit_naive_bayes_classifier(
-    x_train: np.ndarray|scipy.sparse, # Bow 或 TF-IDF，shape = (n_samples, n_features)
+    x_train: np.ndarray | scipy.sparse, # Bow 或 TF-IDF，shape = (n_samples, n_features)
     y_train: np.array, # 標籤向量，長度 = n_samples
     model: NBType = "multinomial",
     alpha: float = 1.0, # 平滑參數
