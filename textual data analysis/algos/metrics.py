@@ -14,7 +14,7 @@ def evaluate_metrics(
     print("====== classification report ======")
     print(classification_report(y_true, y_pred, digits = 5))
 
-    print("\n====== confusion matrix ======")
     if labels:
+        print("\n====== confusion matrix ======")
         cm = confusion_matrix(y_true, y_pred, labels = labels)
         print(pd.DataFrame(cm, index = labels, columns = labels))
