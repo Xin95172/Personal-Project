@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import TensorDataset, DataLoader, Dataset
 from sklearn.metrics import classification_report, f1_score, confusion_matrix
 import scipy.sparse as sp
 from algos.metrics import evaluate_metrics
@@ -25,8 +25,46 @@ class NNClassifierModel(nn.Module):
         return self.net(x)
 
 def sparse_to_dense_tensor(sparse_matrix: sp.csr_matrix) -> torch.Tensor:
+    """
+    NOTE: Converting the entire sparse matrix to dense can OOM on large vocab.
+    Prefer per-row conversion via SparseCSRDataset below.
+    """
     dense = sparse_matrix.toarray()
     return torch.tensor(dense, dtype=torch.float32)
+
+class SparseCSRDataset(Dataset):
+    """Wrap a CSR matrix and labels, converting rows to dense on-the-fly.
+
+    If labels are non-numeric (e.g., strings), a dummy 0 label is returned to
+    keep DataLoader collate happy during inference.
+    """
+    def __init__(self, X: sp.csr_matrix, y: np.ndarray | None, dtype: torch.dtype = torch.float32):
+        assert sp.issparse(X), "X must be a scipy sparse matrix"
+        self.X = X.tocsr()
+        self.y = None if y is None else np.asarray(y)
+        self.dtype = dtype
+
+    def __len__(self) -> int:
+        return self.X.shape[0]
+
+    def __getitem__(self, idx: int):
+        row = self.X[idx]
+        x = torch.tensor(row.toarray().ravel(), dtype=self.dtype)
+        # Return label if provided; coerce to numeric tensor. If non-numeric, use dummy 0.
+        if self.y is None:
+            y_t = torch.tensor(0, dtype=torch.long)
+        else:
+            val = self.y[idx]
+            try:
+                # np.integer or python int -> make long tensor
+                if isinstance(val, (np.integer, int)) or (hasattr(self.y, 'dtype') and self.y.dtype.kind in 'iu'):
+                    y_t = torch.tensor(val, dtype=torch.long)
+                else:
+                    # non-numeric label (e.g., str), fallback to 0
+                    y_t = torch.tensor(0, dtype=torch.long)
+            except Exception:
+                y_t = torch.tensor(0, dtype=torch.long)
+        return x, y_t
 
 def train_model(
     model: nn.Module,
@@ -49,14 +87,14 @@ def train_model(
         y_val = le.transform(y_val)
 
     # 轉成 tensor
-    if sp.issparse(x_train):
+    if False and sp.issparse(x_train):
         x_train = sparse_to_dense_tensor(x_train)
-    elif not isinstance(x_train, torch.Tensor):
+    elif (not isinstance(x_train, torch.Tensor)) and (not sp.issparse(x_train)):
         x_train = torch.tensor(x_train, dtype=torch.float32)
 
-    if sp.issparse(x_val):
+    if False and sp.issparse(x_val):
         x_val = sparse_to_dense_tensor(x_val)
-    elif not isinstance(x_val, torch.Tensor):
+    elif (not isinstance(x_val, torch.Tensor)) and (not sp.issparse(x_val)):
         x_val = torch.tensor(x_val, dtype=torch.float32)
 
     if not isinstance(y_train, torch.Tensor):
@@ -73,8 +111,17 @@ def train_model(
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
-    train_loader = DataLoader(TensorDataset(x_train, y_train), batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(TensorDataset(x_val, y_val), batch_size=batch_size)
+    # DataLoaders: support sparse X by densifying per-row on the fly
+    def make_loader(X, y, batch_size: int, shuffle: bool):
+        if sp.issparse(X):
+            return DataLoader(SparseCSRDataset(X, y), batch_size=batch_size, shuffle=shuffle)
+        else:
+            X_t = X if isinstance(X, torch.Tensor) else torch.tensor(X, dtype=torch.float32)
+            y_t = y if isinstance(y, torch.Tensor) else torch.tensor(y, dtype=torch.long)
+            return DataLoader(TensorDataset(X_t, y_t), batch_size=batch_size, shuffle=shuffle)
+
+    train_loader = make_loader(x_train, y_train, batch_size=batch_size, shuffle=True)
+    val_loader = make_loader(x_val, y_val, batch_size=batch_size, shuffle=False)
 
     best_f1 = -1.0
     metrics_per_epoch = []
@@ -111,8 +158,13 @@ def train_model(
         y_true = torch.cat(all_labels)
         f1_macro = f1_score(y_true, y_pred, average="macro")
 
-        y_pred_labels = le.inverse_transform(y_pred.numpy())
-        y_true_labels = le.inverse_transform(y_true.numpy())
+        # 轉回原始標籤（若使用了 LabelEncoder）
+        if 'le' in locals():
+            y_pred_labels = le.inverse_transform(y_pred.numpy())
+            y_true_labels = le.inverse_transform(y_true.numpy())
+        else:
+            y_pred_labels = y_pred.numpy()
+            y_true_labels = y_true.numpy()
 
         metrics_per_epoch.append({
             "epoch": epoch + 1,
@@ -122,8 +174,8 @@ def train_model(
         })
 
         print(f"[Epoch {epoch + 1}] Loss: {avg_loss:.4f} | Acc: {acc:.4f} | F1_macro: {f1_macro:.4f}")
-        print("Confusion Matrix:\n", evaluate_metrics(y_true_labels, y_pred_labels, labels = labels))
-        print(classification_report(y_true_labels, y_pred_labels, digits = 4))
+        # 輸出報表與混淆矩陣（避免 UndefinedMetricWarning）
+        evaluate_metrics(y_true_labels, y_pred_labels, labels = labels, zero_division = 0)
 
         if f1_macro > best_f1:
             best_f1 = f1_macro
