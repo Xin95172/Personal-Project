@@ -1,4 +1,4 @@
-﻿from typing import Any, Callable, cast
+﻿from typing import Any, Callable, Protocol, cast
 
 import numpy as np
 import scipy.sparse as sp
@@ -51,7 +51,9 @@ class RTextirWrapper:
             self.textir = importr("textir")
             print("[MNIR] textir 安裝並載入完成")
 
-    def convert_to_r_format(self, X: sp.spmatrix, Y: np.ndarray) -> tuple[RS4, robjects.FloatVector]:
+    def convert_to_r_format(
+        self, X: sp.spmatrix, Y: np.ndarray
+    ) -> tuple[RS4, robjects.FloatVector]:
         """
         把 SciPy 稀疏矩陣轉成 R 的稀疏矩陣格式
         並把 Y 轉成 R 的向量格式。
@@ -76,78 +78,104 @@ class RTextirWrapper:
             index1=False,
         )
 
-        Y_vector = robjects.FloatVector(Y)
-
-        return r_sparse_matrix, Y_vector
+        y_vector = robjects.FloatVector(np.asarray(Y, dtype=float))
+        return r_sparse_matrix, y_vector
 
     def fit_mnlm(self, X: RS4, Y: robjects.FloatVector) -> Any:
         """訓練 MultiNomial Linear Model 模型。"""
         self.model = self.textir.mnlm(covars=Y, counts=X)
         return self.model
-    
+
     def transform_srproj(self, X: RS4) -> np.ndarray:
         """
         srproj: sufficient reduction projection
         使用訓練好的 mnlm 模型進行降維投影 (Sufficient Reduction)。
-        將高維度的詞頻矩陣，壓縮成對應目標變數的特徵分數 (Z scores)。
+        將高維度的詞頻矩陣壓縮成對應目標變數的特徵分數 (Z scores)。
         """
         if self.model is None:
             raise ValueError("模型尚未訓練！請先呼叫 fit_mnlm。")
 
-        # 呼叫 R 的 srproj 函數
         z_scores_r = self.textir.srproj(self.model, counts=X)
-
-        # 將 R 的結果安全地轉換回 Python 的 NumPy 二維陣列
-        z_scores_np = np.asarray(z_scores_r)
-        
-        return z_scores_np
+        return np.asarray(z_scores_r)
 
     def get_coefs(self) -> np.ndarray:
-        """
-        提取 mnlm 模型中各字詞的迴歸係數 (權重)。
-        """
+        """提取 mnlm 模型中各字詞的迴歸係數 (權重)。"""
         if self.model is None:
             raise ValueError("模型尚未訓練！請先呼叫 fit_mnlm。")
-            
+
         coefs_r = self.base.coef(self.model)
-        
         return np.asarray(coefs_r)
 
-from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
-from sklearn.naive_bayes import GaussianNB
-from sklearn.neural_network import MLPClassifier, MLPRegressor
+
+class FitPredictModel(Protocol):
+    def fit(self, *args: Any, **kwargs: Any) -> Any:
+        ...
+
+    def predict(self, *args: Any, **kwargs: Any) -> np.ndarray:
+        ...
+
+
+def _build_local_model(model_name: str, **kwargs: Any) -> FitPredictModel:
+    """用專案內的 algos 模組建立最終預測模型。"""
+    name = model_name.lower()
+    if name in {"rf", "random_forest"}:
+        from .random_forest import RFClassifier
+
+        return cast(FitPredictModel, RFClassifier(**kwargs))
+    if name in {"svm"}:
+        from .svm import SVMClassifier
+
+        return cast(FitPredictModel, SVMClassifier(**kwargs))
+    if name in {"knn"}:
+        from .knn import KNNClassifier
+
+        return cast(FitPredictModel, KNNClassifier(**kwargs))
+    if name in {"naive_bayes", "nb"}:
+        from .naive_bayes import NaiveBayesClassifier
+
+        return cast(FitPredictModel, NaiveBayesClassifier(**kwargs))
+
+    raise ValueError(
+        "不支援的 model_name。可用值: rf, random_forest, svm, knn, naive_bayes, nb"
+    )
+
 
 class MNIRPredictor:
-    """
-    全功能 MNIR 預測器：
-    支持多種後端模型 (Regression 或 Classification)。
-    """
-    def __init__(self, r_wrapper: RTextirWrapper, final_model: Any):
+    """全功能 MNIR 預測器，後端使用你在 algos 寫好的模型。"""
+
+    def __init__(
+        self,
+        r_wrapper: RTextirWrapper,
+        final_model: FitPredictModel | str,
+        model_kwargs: dict[str, Any] | None = None,
+    ):
         """
-        :param r_wrapper: 你的 RTextirWrapper 實例
-        :param final_model: 任何符合 sklearn 介面的模型實例 (例如 RandomForestRegressor())
+        :param r_wrapper: RTextirWrapper 實例
+        :param final_model: 你在 algos 寫好的模型實例，或模型名稱字串（例如 "rf"）
+        :param model_kwargs: 當 final_model 是字串時，傳給模型建構子的參數
         """
         self.r_wrapper = r_wrapper
-        self.final_model = final_model
+        if isinstance(final_model, str):
+            self.final_model = _build_local_model(final_model, **(model_kwargs or {}))
+        else:
+            self.final_model = final_model
         self.is_fitted = False
 
-    def fit(self, X: sp.spmatrix, Y: np.ndarray):
+    def fit(self, X: sp.spmatrix, Y: np.ndarray) -> "MNIRPredictor":
         print(f"[MNIR] 開始訓練流程，後端模型: {type(self.final_model).__name__}")
-        
-        # 1. 轉換並訓練 R 端的 mnlm
+
         r_X, r_Y = self.r_wrapper.convert_to_r_format(X, Y)
         self.r_wrapper.fit_mnlm(r_X, r_Y)
-        
-        # 2. 提取 Z 分數 (降維特徵)
+
         z_features = self.r_wrapper.transform_srproj(r_X)
-        
-        # 3. 訓練 Python 端的最終模型
-        # 注意：Z 分數通常是 (n_samples, 1) 或 (n_samples, n_targets)
-        self.final_model.fit(z_features, Y)
-        
+        if z_features.ndim == 1:
+            z_features = z_features.reshape(-1, 1)
+
+        try:
+            self.final_model.fit(x_train=z_features, y_train=Y)
+        except TypeError:
+            self.final_model.fit(z_features, Y)
+
         self.is_fitted = True
         print("[MNIR] 訓練完成。")
         return self
@@ -155,13 +183,12 @@ class MNIRPredictor:
     def predict(self, X: sp.spmatrix) -> np.ndarray:
         if not self.is_fitted:
             raise RuntimeError("模型尚未訓練！")
-            
-        # 轉換測試資料 (Y 給空值即可)
-        dummy_y = np.zeros(X.shape[0])
+
+        dummy_y = np.zeros(X.shape[0], dtype=float)
         r_X_test, _ = self.r_wrapper.convert_to_r_format(X, dummy_y)
-        
-        # 提取測試集的 Z 分數
+
         z_test = self.r_wrapper.transform_srproj(r_X_test)
-        
-        # 最終預測
+        if z_test.ndim == 1:
+            z_test = z_test.reshape(-1, 1)
+
         return self.final_model.predict(z_test)
