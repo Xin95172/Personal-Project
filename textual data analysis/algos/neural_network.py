@@ -1,11 +1,15 @@
 import numpy as np
 import torch
 import torch.nn as nn
+from pathlib import Path
 from torch.utils.data import TensorDataset, DataLoader, Dataset
 from sklearn.metrics import classification_report, f1_score, confusion_matrix
 import scipy.sparse as sp
 from algos.metrics import evaluate_metrics
 from sklearn.preprocessing import LabelEncoder
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_MODEL_PATH = PROJECT_ROOT / "artifacts" / "models" / "best_model.pt"
 
 
 class NNClassifierModel(nn.Module):
@@ -77,9 +81,13 @@ def train_model(
     lr: float = 1e-3,
     weight_decay: float = 1e-4,
     device: str = "cpu",
-    save_path: str = "best_model.pt",
+    save_path: str | None = None,
     labels: list | None = None
 ):
+    if save_path is None:
+        save_path = str(DEFAULT_MODEL_PATH)
+    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+
     # Label encoding（共用同一個 encoder）
     if not np.issubdtype(np.array(y_train).dtype, np.integer):
         le = LabelEncoder()

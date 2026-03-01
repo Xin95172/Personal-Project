@@ -2,11 +2,15 @@ import re
 import unicodedata
 from typing import Any, Literal
 from collections.abc import Callable
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+LEXICON_DIR = PROJECT_ROOT / "lexicon_resources"
 
 def custom_tokenizer(text: str) -> list[str]:
     PUNCS_TO_SPACE = r"[（）\(\)【】「」『』《》〈〉〔〕［］—–‐\-~·•…、，。．；：？！?!]"
@@ -114,10 +118,11 @@ def get_dtm_BoW(
     dtm = pd.DataFrame.sparse.from_spmatrix(dtm_sparse, index=df.index, columns=vocab)
 
     # save files
+    LEXICON_DIR.mkdir(parents=True, exist_ok=True)
     if model == "BoW":
-        sp.save_npz("dtm_csr_BoW.npz", dtm_sparse)
+        sp.save_npz(str(LEXICON_DIR / "dtm_csr_BoW.npz"), dtm_sparse)
     elif model == "TF-IDF":
-        sp.save_npz("dtm_csr_TF_IDF.npz", dtm_sparse)
+        sp.save_npz(str(LEXICON_DIR / "dtm_csr_TF_IDF.npz"), dtm_sparse)
 
     # # debug
     # with open("forced_delete.txt", "w", encoding="utf-8") as f:
