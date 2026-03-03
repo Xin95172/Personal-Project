@@ -3,11 +3,11 @@
 import numpy as np
 import scipy.sparse as sp
 import rpy2.robjects as robjects
-from rpy2.robjects import RS4, numpy2ri
+from rpy2.robjects import RS4
 from rpy2.robjects.packages import importr
+from sklearn.preprocessing import LabelEncoder
 
 # 啟用 NumPy <-> R 物件自動轉換
-numpy2ri.activate()
 
 
 def _as_callable(obj: Any, name: str) -> Callable[..., Any]:
@@ -21,7 +21,7 @@ def _as_callable(obj: Any, name: str) -> Callable[..., Any]:
 class RTextirWrapper:
     """Python 對 R 套件 textir 的簡單包裝。"""
 
-    def __init__(self, auto_install: bool = True):
+    def __init__(self, auto_install: bool = False, cran_mirror: str = "https://cloud.r-project.org"):
         self.model: Any = None
         self.base: Any = None
         self.utils: Any = None
@@ -47,7 +47,8 @@ class RTextirWrapper:
                 getattr(self.utils, "install_packages", None),
                 "utils::install_packages",
             )
-            install_packages("textir")
+            # Force non-interactive CRAN mirror to avoid console prompts in notebooks.
+            install_packages("textir", repos=cran_mirror)
             self.textir = importr("textir")
             print("[MNIR] textir 安裝並載入完成")
 
@@ -78,12 +79,12 @@ class RTextirWrapper:
             index1=False,
         )
 
-        y_vector = robjects.FloatVector(np.asarray(Y, dtype=float))
+        y_vector = robjects.FloatVector(np.asarray(Y, dtype=float).tolist())
         return r_sparse_matrix, y_vector
 
     def fit_mnlm(self, X: RS4, Y: robjects.FloatVector) -> Any:
         """訓練 MultiNomial Linear Model 模型。"""
-        self.model = self.textir.mnlm(covars=Y, counts=X)
+        self.model = self.textir.mnlm(cl=robjects.NULL, covars=Y, counts=X)
         return self.model
 
     def transform_srproj(self, X: RS4) -> np.ndarray:
@@ -115,6 +116,15 @@ class FitPredictModel(Protocol):
         ...
 
 
+def _to_1d_labels(y: np.ndarray, name: str = "Y") -> np.ndarray:
+    y_arr = np.asarray(y)
+    if y_arr.ndim == 2 and y_arr.shape[1] == 1:
+        y_arr = y_arr.ravel()
+    elif y_arr.ndim != 1:
+        raise ValueError(f"{name} must be 1D, got shape={y_arr.shape}")
+    return y_arr
+
+
 def _build_local_model(model_name: str, **kwargs: Any) -> FitPredictModel:
     """用專案內的 algos 模組建立最終預測模型。"""
     name = model_name.lower()
@@ -140,6 +150,55 @@ def _build_local_model(model_name: str, **kwargs: Any) -> FitPredictModel:
     )
 
 
+class MNIRFeatureExtractor:
+    """抽取 MNIR 特徵，可重複用於多個下游模型。"""
+
+    def __init__(self, r_wrapper: RTextirWrapper):
+        self.r_wrapper = r_wrapper
+        self.is_fitted = False
+        self._z_train_cache: np.ndarray | None = None
+
+    def fit(self, X: sp.spmatrix, Y: np.ndarray) -> "MNIRFeatureExtractor":
+        y_arr = _to_1d_labels(Y, name="Y")
+
+        # R textir::mnlm requires numeric covariates.
+        if np.issubdtype(y_arr.dtype, np.number):
+            y_for_r = y_arr.astype(float)
+        else:
+            y_for_r = LabelEncoder().fit_transform(y_arr).astype(float)
+
+        r_X, r_Y = self.r_wrapper.convert_to_r_format(X, y_for_r)
+        self.r_wrapper.fit_mnlm(r_X, r_Y)
+
+        z_train = self.r_wrapper.transform_srproj(r_X)
+        if z_train.ndim == 1:
+            z_train = z_train.reshape(-1, 1)
+
+        self._z_train_cache = z_train
+        self.is_fitted = True
+        return self
+
+    def fit_transform(self, X: sp.spmatrix, Y: np.ndarray) -> np.ndarray:
+        self.fit(X, Y)
+        return self.get_train_features()
+
+    def transform(self, X: sp.spmatrix) -> np.ndarray:
+        if not self.is_fitted:
+            raise RuntimeError("MNIRFeatureExtractor 尚未訓練！請先呼叫 fit。")
+
+        dummy_y = np.zeros(X.shape[0], dtype=float)
+        r_X, _ = self.r_wrapper.convert_to_r_format(X, dummy_y)
+        z = self.r_wrapper.transform_srproj(r_X)
+        if z.ndim == 1:
+            z = z.reshape(-1, 1)
+        return z
+
+    def get_train_features(self) -> np.ndarray:
+        if self._z_train_cache is None:
+            raise RuntimeError("尚未有訓練特徵快取，請先呼叫 fit 或 fit_transform。")
+        return self._z_train_cache
+
+
 class MNIRPredictor:
     """全功能 MNIR 預測器，後端使用你在 algos 寫好的模型。"""
 
@@ -148,33 +207,36 @@ class MNIRPredictor:
         r_wrapper: RTextirWrapper,
         final_model: FitPredictModel | str,
         model_kwargs: dict[str, Any] | None = None,
+        feature_extractor: MNIRFeatureExtractor | None = None,
     ):
         """
         :param r_wrapper: RTextirWrapper 實例
         :param final_model: 你在 algos 寫好的模型實例，或模型名稱字串（例如 "rf"）
         :param model_kwargs: 當 final_model 是字串時，傳給模型建構子的參數
+        :param feature_extractor: 可重用的 MNIR 特徵抽取器；可跨多個模型共用
         """
         self.r_wrapper = r_wrapper
+        self.feature_extractor = feature_extractor or MNIRFeatureExtractor(r_wrapper)
         if isinstance(final_model, str):
             self.final_model = _build_local_model(final_model, **(model_kwargs or {}))
         else:
             self.final_model = final_model
         self.is_fitted = False
 
-    def fit(self, X: sp.spmatrix, Y: np.ndarray) -> "MNIRPredictor":
+    def fit(self, X: sp.spmatrix, Y: np.ndarray, reuse_mnir: bool = True) -> "MNIRPredictor":
         print(f"[MNIR] 開始訓練流程，後端模型: {type(self.final_model).__name__}")
 
-        r_X, r_Y = self.r_wrapper.convert_to_r_format(X, Y)
-        self.r_wrapper.fit_mnlm(r_X, r_Y)
+        y_arr = _to_1d_labels(Y, name="Y")
 
-        z_features = self.r_wrapper.transform_srproj(r_X)
-        if z_features.ndim == 1:
-            z_features = z_features.reshape(-1, 1)
+        if reuse_mnir and self.feature_extractor.is_fitted:
+            z_features = self.feature_extractor.transform(X)
+        else:
+            z_features = self.feature_extractor.fit_transform(X, y_arr)
 
         try:
-            self.final_model.fit(x_train=z_features, y_train=Y)
+            self.final_model.fit(x_train=z_features, y_train=y_arr)
         except TypeError:
-            self.final_model.fit(z_features, Y)
+            self.final_model.fit(z_features, y_arr)
 
         self.is_fitted = True
         print("[MNIR] 訓練完成。")
@@ -184,11 +246,5 @@ class MNIRPredictor:
         if not self.is_fitted:
             raise RuntimeError("模型尚未訓練！")
 
-        dummy_y = np.zeros(X.shape[0], dtype=float)
-        r_X_test, _ = self.r_wrapper.convert_to_r_format(X, dummy_y)
-
-        z_test = self.r_wrapper.transform_srproj(r_X_test)
-        if z_test.ndim == 1:
-            z_test = z_test.reshape(-1, 1)
-
+        z_test = self.feature_extractor.transform(X)
         return self.final_model.predict(z_test)

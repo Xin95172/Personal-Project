@@ -22,7 +22,7 @@ def evaluate_metrics(
     ))
 
     if labels:
-        print("\n====== confusion matrix ======")
+        print("====== confusion matrix ======")
         cm = confusion_matrix(y_true, y_pred, labels = labels)
         print(pd.DataFrame(
             cm,

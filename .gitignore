@@ -2,3 +2,10 @@
 /textual data analysis/artifacts/models/best_model.pt
 /投資組合競賽/data
 **/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+~$*.docx
+~$*.xlsx
+.DS_Store

@@ -1,26 +1,36 @@
-from typing import Literal
+﻿from typing import Literal
+
 import numpy as np
 import scipy.sparse as sp
 from sklearn.tree import DecisionTreeClassifier
 
+
 DTType = Literal["gini", "entropy"]
 
+
+def _ensure_1d_labels(y: np.ndarray, name: str = "y_train") -> np.ndarray:
+    y_arr = np.asarray(y)
+    if y_arr.ndim == 2 and y_arr.shape[1] == 1:
+        y_arr = y_arr.ravel()
+    elif y_arr.ndim != 1:
+        raise ValueError(f"{name} must be 1D, got shape={y_arr.shape}")
+    return y_arr
+
+
 def fit_decision_tree_classifier(
-    x_train: np.ndarray | sp.spmatrix,   # 特徵矩陣 (BoW/TF-IDF)，稠密或稀疏
-    y_train: np.ndarray,                 # 標籤向量
-    criterion: DTType = "entropy",       # 分裂準則，[gini, entropy]
-    max_depth: int | None = None,        # 限制深度以防過擬合
-    min_samples_leaf: int = 1,           # 葉節點最少樣本數
-    random_state: int = 42               # 固定隨機種子，結果可重現
+    x_train: np.ndarray | sp.spmatrix,
+    y_train: np.ndarray,
+    criterion: DTType = "entropy",
+    max_depth: int | None = None,
+    min_samples_leaf: int = 1,
+    random_state: int = 42,
 ) -> DecisionTreeClassifier:
-    """
-    訓練 Decision Tree classifier
-    """
     clf = DecisionTreeClassifier(
-        criterion = criterion,
-        max_depth = max_depth,
-        min_samples_leaf = min_samples_leaf,
-        random_state = random_state
+        criterion=criterion,
+        max_depth=max_depth,
+        min_samples_leaf=min_samples_leaf,
+        random_state=random_state,
     )
-    clf.fit(x_train, y_train)
+    y_arr = _ensure_1d_labels(y_train)
+    clf.fit(x_train, y_arr)
     return clf
