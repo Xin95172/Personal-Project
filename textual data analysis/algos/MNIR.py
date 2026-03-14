@@ -1,4 +1,4 @@
-﻿from typing import Any, Callable, Protocol, cast
+from typing import Any, Callable, Protocol, cast
 
 from pathlib import Path
 import re
@@ -19,6 +19,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.preprocessing import LabelEncoder
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FEATURES_DIR = PROJECT_ROOT / "artifacts" / "features"
@@ -233,10 +234,10 @@ def summarize_predictions(
 
     main_df = pd.DataFrame(
         {
-            "accuracy": [accuracy],
-            "mean_f1": [macro_f1],
-            "weighted_f1": [weighted_f1],
-            "f1_std": [np.nan],
+            "accuracy_mean": [accuracy],
+            "macro_f1_mean": [macro_f1],
+            "weighted_f1_mean": [weighted_f1],
+            "macro_f1_std": [np.nan],
         },
         index=["single_run"],
     )
@@ -249,12 +250,12 @@ def summarize_predictions(
     )
     class_report_df = pd.DataFrame(
         {
+            "class": labels,
             "precision": precision,
             "recall": recall,
             "f1_score": f1_values,
             "support": support.astype(int),
-        },
-        index=labels,
+        }
     )
 
     cm = confusion_matrix(y_true_arr, y_pred_arr, labels=labels)
@@ -266,7 +267,7 @@ def summarize_predictions(
     fig_path = reports_dir / f"{stem}_confusion_matrix.png"
 
     main_df.to_csv(main_path, encoding="utf-8-sig")
-    class_report_df.to_csv(class_path, encoding="utf-8-sig")
+    class_report_df.to_csv(class_path, index=False, encoding="utf-8-sig")
     cm_df.to_csv(cm_path, encoding="utf-8-sig")
 
     fig, ax = plt.subplots(figsize=(7, 6))
@@ -597,6 +598,92 @@ def export_single_split_outputs(
     }
 
 
+# --- Leakage / 單一折輔助函數 ---
+def remove_leakage_phrases(
+    text: str,
+    exact_patterns: list[str] | None = None,
+    soft_patterns: list[str] | None = None,
+    remove_soft: bool = False,
+) -> str:
+    """
+    移除會洩漏判決結果的字詞或句型。
+    支援透過確切字詞 (exact) 或正則表達式 (soft) 取代。
+    """
+    if not isinstance(text, str):
+        return ""
+    if exact_patterns:
+        for p in exact_patterns:
+            text = text.replace(p, "")
+    if remove_soft and soft_patterns:
+        for p in soft_patterns:
+            text = re.sub(p, "", text)
+    return text.strip()
+
+def prepare_model_text(
+    text_series: pd.Series,
+    exact_patterns: list[str] | None = None,
+    soft_patterns: list[str] | None = None,
+    remove_soft: bool = False,
+) -> pd.Series:
+    """
+    Notebook 友善的前處理函式，將 leakage 清理接到資料流程。
+    自動補齊空值轉字串，並套用 remove_leakage_phrases。
+    """
+    s = text_series.fillna("").astype(str)
+    return s.apply(lambda x: remove_leakage_phrases(x, exact_patterns, soft_patterns, remove_soft))
+
+def run_single_fold(
+    train_idx: np.ndarray,
+    val_idx: np.ndarray,
+    X: sp.spmatrix,
+    y: np.ndarray,
+    model_name: str = "rf",
+    model_kwargs: dict[str, Any] | None = None,
+    label_order: list[str] | None = None,
+) -> dict[str, Any]:
+    """
+    執行單一 Fold 的完整流程 (MNIR 特徵抽取與下游分類)。
+    回傳 y_true, y_pred, 各類指標以及降維特徵。
+    """
+    y_arr, labels = _normalize_labels(y, label_order)
+    x_train, x_val = X[train_idx], X[val_idx]
+    y_train, y_val = y_arr[train_idx], y_arr[val_idx]
+
+    predictor = MNIRPredictor(
+        r_wrapper=RTextirWrapper(auto_install=False),
+        final_model=model_name,
+        model_kwargs=model_kwargs,
+    )
+    predictor.fit(x_train, y_train)
+
+    z_train = predictor.get_train_features()
+    z_val = predictor.transform_features(x_val)
+    y_pred = _to_1d_labels(predictor.predict(x_val), name="y_pred").astype(str)
+
+    accuracy = accuracy_score(y_val, y_pred)
+    macro_f1 = f1_score(y_val, y_pred, average="macro", zero_division=0)
+    weighted_f1 = f1_score(y_val, y_pred, average="weighted", zero_division=0)
+
+    cls_report = classification_report(y_val, y_pred, labels=labels, output_dict=True, zero_division=0)
+    cm = confusion_matrix(y_val, y_pred, labels=labels)
+
+    return {
+        "train_idx": train_idx,
+        "valid_idx": val_idx,
+        "y_true": y_val,
+        "y_pred": y_pred,
+        "accuracy": accuracy,
+        "macro_f1": macro_f1,
+        "weighted_f1": weighted_f1,
+        "classification_report": cls_report,
+        "confusion_matrix": cm,
+        "Z_train": z_train,
+        "Z_valid": z_val,
+        "extractor": predictor.feature_extractor,
+        "model": predictor.final_model,
+        "predictor": predictor
+    }
+
 def export_repeated_cv_outputs(
     X: sp.spmatrix,
     y: np.ndarray,
@@ -647,24 +734,21 @@ def export_repeated_cv_outputs(
         repeat_id = ((split_idx - 1) // n_splits) + 1
         fold_id = ((split_idx - 1) % n_splits) + 1
 
-        x_train, x_val = X[train_idx], X[val_idx]
-        y_train, y_val = y_arr[train_idx], y_arr[val_idx]
-
-        predictor = MNIRPredictor(
-            r_wrapper=RTextirWrapper(auto_install=False),
-            final_model=model_name,
-            model_kwargs=model_kwargs,
+        fold_res = run_single_fold(
+            train_idx, val_idx, X, y_arr,
+            model_name=model_name, model_kwargs=model_kwargs, label_order=labels
         )
-        predictor.fit(x_train, y_train)
-        y_pred = _to_1d_labels(predictor.predict(x_val), name="y_pred").astype(str)
+
+        y_val = fold_res["y_true"]
+        y_pred = fold_res["y_pred"]
 
         fold_rows.append(
             {
                 "repeat": repeat_id,
                 "fold": fold_id,
-                "accuracy": accuracy_score(y_val, y_pred),
-                "macro_f1": f1_score(y_val, y_pred, average="macro", zero_division=0),
-                "weighted_f1": f1_score(y_val, y_pred, average="weighted", zero_division=0),
+                "accuracy": fold_res["accuracy"],
+                "macro_f1": fold_res["macro_f1"],
+                "weighted_f1": fold_res["weighted_f1"],
             }
         )
 
@@ -696,10 +780,10 @@ def export_repeated_cv_outputs(
 
     main_summary_df = pd.DataFrame(
         {
-            "accuracy": [fold_df["accuracy"].mean()],
-            "mean_f1": [fold_df["macro_f1"].mean()],
-            "weighted_f1": [fold_df["weighted_f1"].mean()],
-            "f1_std": [fold_df["macro_f1"].std(ddof=0)],
+            "accuracy_mean": [fold_df["accuracy"].mean()],
+            "macro_f1_mean": [fold_df["macro_f1"].mean()],
+            "weighted_f1_mean": [fold_df["weighted_f1"].mean()],
+            "macro_f1_std": [fold_df["macro_f1"].std(ddof=0)],
         },
         index=["mnir"],
     )
@@ -714,7 +798,7 @@ def export_repeated_cv_outputs(
         label_order=labels,
         output_dir=reports_dir,
     )
-    pooled_main_df.iloc[0, pooled_main_df.columns.get_loc("f1_std")] = float(fold_df["macro_f1"].std(ddof=0))
+    pooled_main_df.iloc[0, pooled_main_df.columns.get_loc("macro_f1_std")] = float(fold_df["macro_f1"].std(ddof=0))
     pooled_main_df.to_csv(reports_dir / f"{stem}_pooled_main_summary.csv", encoding="utf-8-sig")
 
     keyword_df: pd.DataFrame
@@ -786,17 +870,17 @@ def export_repeated_cv_outputs(
         )
 
     return {
-        "sample_distribution_df": sample_df,
-        "fold_metrics_df": fold_df,
-        "prediction_detail_df": prediction_df,
+        "sample_df": sample_df,
+        "fold_df": fold_df,
+        "prediction_df": prediction_df,
         "main_summary_df": main_summary_df,
         "pooled_main_df": pooled_main_df,
         "class_report_df": class_report_df,
-        "confusion_matrix_df": cm_df,
+        "cm_df": cm_df,
         "keyword_df": keyword_df,
         "sparsity_df": sparsity_df,
         "sr_plot_path": sr_plot_path,
-        "predictor": full_fit_predictor,
+        "full_fit_predictor": full_fit_predictor,
     }
 
 
@@ -938,6 +1022,34 @@ class MNIRPredictor:
         return self.final_model.predict(z_test)
 
 
+import warnings
+
+def build_vectorizer(config: dict[str, Any]) -> Any:
+    """依據設定建立 Vectorizer (TFIDF 或 BoW)。"""
+    v_type = config.get("vectorizer_type", "tfidf").lower()
+    max_features = config.get("max_features", 10000)
+    ngram_range = config.get("ngram_range", (1, 1))
+    min_df = config.get("min_df", 1)
+    max_df = config.get("max_df", 1.0)
+
+    if v_type == "tfidf":
+        return TfidfVectorizer(
+            max_features=max_features,
+            ngram_range=ngram_range,
+            min_df=min_df,
+            max_df=max_df
+        )
+    elif v_type in ["count", "bow"]:
+        return CountVectorizer(
+            max_features=max_features,
+            ngram_range=ngram_range,
+            min_df=min_df,
+            max_df=max_df
+        )
+    else:
+        raise ValueError("不支援的 vectorizer_type，請使用 'tfidf' 或 'count'。")
+
+
 def compare_representations_cv(
     X_bow: sp.spmatrix,
     X_tfidf: sp.spmatrix,
@@ -949,7 +1061,17 @@ def compare_representations_cv(
     n_repeats: int = 3,
     random_state: int = 42,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Compare BoW and TF-IDF under repeated stratified k-fold CV with MNIR features."""
+    """
+    [LEGACY] Compare BoW and TF-IDF under repeated stratified k-fold CV with MNIR features.
+    This function is maintained for backward compatibility but is no longer the main notebook workflow.
+    Please use `export_repeated_cv_outputs` and isolated model flows.
+    """
+    warnings.warn(
+        "compare_representations_cv is a legacy function and is no longer the main workflow. "
+        "Please rely on export_repeated_cv_outputs with a specific model setting.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     y_arr = _to_1d_labels(y, name="y")
     labels = label_order or sorted(pd.Series(y_arr).astype(str).unique().tolist())
     cv = RepeatedStratifiedKFold(
@@ -1036,10 +1158,10 @@ def compare_representations_cv(
     main_summary_df = (
         fold_df.groupby("representation")[["accuracy", "macro_f1", "weighted_f1"]]
         .mean()
-        .rename(columns={"macro_f1": "mean_f1", "weighted_f1": "weighted_f1"})
+        .rename(columns={"accuracy": "accuracy_mean", "macro_f1": "macro_f1_mean", "weighted_f1": "weighted_f1_mean"})
     )
-    main_summary_df["f1_std"] = fold_df.groupby("representation")["macro_f1"].std(ddof=0)
-    main_summary_df = main_summary_df[["accuracy", "mean_f1", "weighted_f1", "f1_std"]]
+    main_summary_df["macro_f1_std"] = fold_df.groupby("representation")["macro_f1"].std(ddof=0)
+    main_summary_df = main_summary_df[["accuracy_mean", "macro_f1_mean", "weighted_f1_mean", "macro_f1_std"]]
 
     class_cols = [f"{label}_f1" for label in labels]
     class_f1_summary_df = fold_df.groupby("representation")[class_cols].mean()
@@ -1065,3 +1187,66 @@ def compare_representations_cv(
     print(f"[MNIR-CV] saved: {class_path}")
     print(f"[MNIR-CV] saved: {workbook_path}")
     return fold_df, main_summary_df, class_f1_summary_df
+
+def build_classification_report_table(y_true: np.ndarray, y_pred: np.ndarray, label_order: list[str]) -> pd.DataFrame:
+    """依據 y_true 與 y_pred 建立 DataFrame 形式的 Classification Report"""
+    precision, recall, f1_values, support = precision_recall_fscore_support(
+        y_true,
+        y_pred,
+        labels=label_order,
+        zero_division=0,
+    )
+    class_report_df = pd.DataFrame(
+        {
+            "class": label_order,
+            "precision": precision,
+            "recall": recall,
+            "f1_score": f1_values,
+            "support": support.astype(int),
+        }
+    )
+    return class_report_df
+
+def build_pooled_confusion_matrix(prediction_df: pd.DataFrame, label_order: list[str]) -> pd.DataFrame:
+    """依據總體的預測集建立 Pooled Confusion Matrix DataFrame"""
+    cm = confusion_matrix(prediction_df["y_true"], prediction_df["y_pred"], labels=label_order)
+    cm_df = pd.DataFrame(cm, index=label_order, columns=label_order)
+    return cm_df
+
+def run_repeated_cv(X: sp.spmatrix, y: np.ndarray, config: dict[str, Any]) -> dict[str, Any]:
+    """最小可用版本的 CV 執行函式 (包裝 export_repeated_cv_outputs 避免巨幅重構)。"""
+    return export_repeated_cv_outputs(
+        X, y,
+        model_name=config.get("model_name", "rf"),
+        model_kwargs=config.get("model_kwargs", None),
+        label_order=config.get("keep_labels", ["勝訴", "敗訴", "部分勝訴"]),
+        n_splits=config.get("n_splits", 5),
+        n_repeats=config.get("n_repeats", 3),
+        refit_full_for_interpretability=False
+    )
+
+def summarize_cv_results(cv_results: dict[str, Any]) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """最小可用版本：從 run_repeated_cv 結果中萃取 fold_df, summary_df, pred_df"""
+    return cv_results["fold_df"], cv_results["main_summary_df"], cv_results["prediction_df"]
+
+def run_full_experiment(X: sp.spmatrix, y: np.ndarray, config: dict[str, Any]) -> dict[str, Any]:
+    """
+    輕量高層函式：串接 CV、整理 summary 表格、建立 class report 與 confusion matrix。
+    不強制存檔，回傳完整分析物件供 Notebook 中探索或後續寫入硬碟。
+    """
+    labels = config.get("keep_labels", ["勝訴", "敗訴", "部分勝訴"])
+
+    cv_results = run_repeated_cv(X, y, config)
+    fold_df, summary_df, pred_df = summarize_cv_results(cv_results)
+
+    class_report_df = build_classification_report_table(pred_df["y_true"], pred_df["y_pred"], labels)
+    cm_df = build_pooled_confusion_matrix(pred_df, labels)
+
+    return {
+        "cv_results": cv_results,
+        "fold_df": fold_df,
+        "summary_df": summary_df,
+        "prediction_df": pred_df,
+        "class_report_df": class_report_df,
+        "confusion_matrix_df": cm_df
+    }
