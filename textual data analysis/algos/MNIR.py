@@ -24,6 +24,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FEATURES_DIR = PROJECT_ROOT / "artifacts" / "features"
 DEFAULT_TRAIN_FEATURES_PATH = DEFAULT_FEATURES_DIR / "mnir_z_train.npy"
+DEFAULT_VAL_FEATURES_PATH = DEFAULT_FEATURES_DIR / "mnir_z_val.npy"
+DEFAULT_TEST_FEATURES_PATH = DEFAULT_FEATURES_DIR / "mnir_z_test.npy"
+DEFAULT_MODEL_PATH = DEFAULT_FEATURES_DIR / "mnir_mnlm_model.rds"
 DEFAULT_REPORTS_DIR = PROJECT_ROOT / "artifacts" / "reports"
 DEFAULT_LABEL_ORDER = ["勝訴", "敗訴", "部分勝訴"]
 
@@ -127,6 +130,27 @@ class RTextirWrapper:
         coefs_r = self.base.coef(self.model)
         return np.asarray(coefs_r)
 
+    def save_model(self, path: str | Path = DEFAULT_MODEL_PATH) -> Path:
+        if self.model is None:
+            raise ValueError("MNIR model is not fitted. Call fit_mnlm() before save_model().")
+
+        save_path = Path(path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        save_rds = _as_callable(getattr(self.base, "saveRDS", None), "base::saveRDS")
+        save_rds(self.model, file=str(save_path))
+        print(f"[MNIR] saved: {save_path}")
+        return save_path
+
+    def load_model(self, path: str | Path = DEFAULT_MODEL_PATH) -> Any:
+        load_path = Path(path)
+        if not load_path.exists():
+            raise FileNotFoundError(f"找不到 MNIR model 檔案: {load_path}")
+
+        read_rds = _as_callable(getattr(self.base, "readRDS", None), "base::readRDS")
+        self.model = read_rds(str(load_path))
+        print(f"[MNIR] loaded: {load_path}")
+        return self.model
+
 
 class FitPredictModel(Protocol):
     def fit(self, *args: Any, **kwargs: Any) -> Any:
@@ -174,6 +198,12 @@ def _ensure_reports_dir(output_dir: str | Path | None = None) -> Path:
     reports_dir = Path(output_dir) if output_dir else DEFAULT_REPORTS_DIR
     reports_dir.mkdir(parents=True, exist_ok=True)
     return reports_dir
+
+
+def _ensure_features_dir(output_dir: str | Path | None = None) -> Path:
+    features_dir = Path(output_dir) if output_dir else DEFAULT_FEATURES_DIR
+    features_dir.mkdir(parents=True, exist_ok=True)
+    return features_dir
 
 
 def _safe_stem(name: str) -> str:
@@ -466,6 +496,90 @@ def _write_note_csv(
     note_df.to_csv(csv_path, index=False, encoding="utf-8-sig")
     print(f"[MNIR] saved: {csv_path}")
     return note_df
+
+
+def save_feature_matrix(features: np.ndarray, path: str | Path) -> Path:
+    save_path = Path(path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    np.save(save_path, np.asarray(features))
+    print(f"[MNIR] saved: {save_path}")
+    return save_path
+
+
+def load_feature_matrix(path: str | Path) -> np.ndarray:
+    load_path = Path(path)
+    if not load_path.exists():
+        raise FileNotFoundError(f"找不到 MNIR 特徵檔案: {load_path}")
+
+    features = np.load(load_path)
+    if features.ndim == 1:
+        features = features.reshape(-1, 1)
+    return features
+
+
+def save_feature_splits(
+    z_train: np.ndarray,
+    z_val: np.ndarray | None = None,
+    z_test: np.ndarray | None = None,
+    output_dir: str | Path | None = None,
+    train_name: str = "mnir_z_train.npy",
+    val_name: str = "mnir_z_val.npy",
+    test_name: str = "mnir_z_test.npy",
+) -> dict[str, Path]:
+    features_dir = _ensure_features_dir(output_dir)
+    saved_paths = {
+        "train": save_feature_matrix(z_train, features_dir / train_name),
+    }
+    if z_val is not None:
+        saved_paths["val"] = save_feature_matrix(z_val, features_dir / val_name)
+    if z_test is not None:
+        saved_paths["test"] = save_feature_matrix(z_test, features_dir / test_name)
+    return saved_paths
+
+
+def fit_and_save_feature_splits(
+    X_train: sp.spmatrix,
+    y_train: np.ndarray,
+    X_val: sp.spmatrix | None = None,
+    X_test: sp.spmatrix | None = None,
+    output_dir: str | Path | None = None,
+    train_name: str = "mnir_z_train.npy",
+    val_name: str = "mnir_z_val.npy",
+    test_name: str = "mnir_z_test.npy",
+    model_name: str = "mnir_mnlm_model.rds",
+    auto_install: bool = False,
+) -> dict[str, Any]:
+    extractor = MNIRFeatureExtractor(RTextirWrapper(auto_install=auto_install))
+    features_dir = _ensure_features_dir(output_dir)
+    extractor.fit(
+        X_train,
+        y_train,
+        load_cached=False,
+        cache_path=features_dir / train_name,
+        model_path=features_dir / model_name,
+    )
+
+    z_train = extractor.get_train_features()
+    z_val = extractor.transform(X_val) if X_val is not None else None
+    z_test = extractor.transform(X_test) if X_test is not None else None
+
+    saved_paths = save_feature_splits(
+        z_train=z_train,
+        z_val=z_val,
+        z_test=z_test,
+        output_dir=output_dir,
+        train_name=train_name,
+        val_name=val_name,
+        test_name=test_name,
+    )
+    return {
+        "extractor": extractor,
+        "z_train": z_train,
+        "z_val": z_val,
+        "z_test": z_test,
+        "paths": saved_paths,
+        "model_path": features_dir / model_name,
+    }
 
 
 def _fit_local_model(model_name: str, model_kwargs: dict[str, Any] | None, x_train: np.ndarray, y_train: np.ndarray) -> FitPredictModel:
@@ -898,10 +1012,13 @@ class MNIRFeatureExtractor:
         Y: np.ndarray,
         load_cached: bool = False,
         cache_path: str | Path = DEFAULT_TRAIN_FEATURES_PATH,
+        model_path: str | Path = DEFAULT_MODEL_PATH,
     ) -> "MNIRFeatureExtractor":
         cache_file = Path(cache_path)
-        if load_cached and cache_file.exists():
+        model_file = Path(model_path)
+        if load_cached and cache_file.exists() and model_file.exists():
             self.load_train_features(cache_file)
+            self.load_model(model_file)
             return self
 
         y_arr = _to_1d_labels(Y, name="Y")
@@ -922,6 +1039,7 @@ class MNIRFeatureExtractor:
         self._z_train_cache = z_train
         self.is_fitted = True
         self.save_train_features(cache_file)
+        self.save_model(model_file)
         return self
 
     def transform(self, X: sp.spmatrix) -> np.ndarray:
@@ -944,10 +1062,7 @@ class MNIRFeatureExtractor:
         if self._z_train_cache is None:
             raise RuntimeError("尚未有訓練特徵快取，請先呼叫 fit。")
 
-        save_path = Path(path)
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        np.save(save_path, self._z_train_cache)
-        return save_path
+        return save_feature_matrix(self._z_train_cache, path)
 
     def load_train_features(self, path: str | Path = DEFAULT_TRAIN_FEATURES_PATH) -> np.ndarray:
         load_path = Path(path)
@@ -961,6 +1076,14 @@ class MNIRFeatureExtractor:
         self._z_train_cache = z_train
         self.is_fitted = False
         return z_train
+
+    def save_model(self, path: str | Path = DEFAULT_MODEL_PATH) -> Path:
+        return self.r_wrapper.save_model(path)
+
+    def load_model(self, path: str | Path = DEFAULT_MODEL_PATH) -> Any:
+        model = self.r_wrapper.load_model(path)
+        self.is_fitted = True
+        return model
 
 class MNIRPredictor:
     """全功能 MNIR 預測器，後端使用你在 algos 寫好的模型。"""
