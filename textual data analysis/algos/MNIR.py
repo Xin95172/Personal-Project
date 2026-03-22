@@ -582,6 +582,70 @@ def fit_and_save_feature_splits(
     }
 
 
+def load_or_fit_feature_splits(
+    X_train: sp.spmatrix,
+    y_train: np.ndarray,
+    X_val: sp.spmatrix | None = None,
+    X_test: sp.spmatrix | None = None,
+    output_dir: str | Path | None = None,
+    train_name: str = "mnir_z_train.npy",
+    val_name: str = "mnir_z_val.npy",
+    test_name: str = "mnir_z_test.npy",
+    model_name: str = "mnir_mnlm_model.rds",
+    auto_install: bool = False,
+    require_model: bool = True,
+) -> dict[str, Any]:
+    features_dir = _ensure_features_dir(output_dir)
+    train_path = features_dir / train_name
+    val_path = features_dir / val_name
+    test_path = features_dir / test_name
+    model_path = features_dir / model_name
+
+    required_paths = [train_path]
+    if X_val is not None:
+        required_paths.append(val_path)
+    if X_test is not None:
+        required_paths.append(test_path)
+    if require_model:
+        required_paths.append(model_path)
+
+    cache_ready = all(path.exists() for path in required_paths)
+    if cache_ready:
+        result: dict[str, Any] = {
+            "z_train": load_feature_matrix(train_path),
+            "z_val": load_feature_matrix(val_path) if X_val is not None else None,
+            "z_test": load_feature_matrix(test_path) if X_test is not None else None,
+            "paths": {
+                "train": train_path,
+                **({"val": val_path} if X_val is not None else {}),
+                **({"test": test_path} if X_test is not None else {}),
+            },
+            "model_path": model_path,
+            "loaded_from_cache": True,
+        }
+        if require_model:
+            extractor = MNIRFeatureExtractor(RTextirWrapper(auto_install=auto_install))
+            extractor.load_model(model_path)
+            extractor.load_train_features(train_path)
+            result["extractor"] = extractor
+        return result
+
+    result = fit_and_save_feature_splits(
+        X_train=X_train,
+        y_train=y_train,
+        X_val=X_val,
+        X_test=X_test,
+        output_dir=output_dir,
+        train_name=train_name,
+        val_name=val_name,
+        test_name=test_name,
+        model_name=model_name,
+        auto_install=auto_install,
+    )
+    result["loaded_from_cache"] = False
+    return result
+
+
 def _fit_local_model(model_name: str, model_kwargs: dict[str, Any] | None, x_train: np.ndarray, y_train: np.ndarray) -> FitPredictModel:
     model = _build_local_model(model_name, **(model_kwargs or {}))
     try:
