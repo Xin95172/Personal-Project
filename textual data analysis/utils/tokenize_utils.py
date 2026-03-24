@@ -1,6 +1,5 @@
 import re
 import json
-from ckip_transformers.nlp import CkipWordSegmenter
 
 def convert_dict_to_vocab_list(input_dict_path, output_vocab_path=None) -> str:
     with open(input_dict_path, "r", encoding="utf-8") as f:
@@ -17,7 +16,7 @@ def convert_dict_to_vocab_list(input_dict_path, output_vocab_path=None) -> str:
 
     return vocab_pattern
 
-def word_seg(text: str, ws_driver: CkipWordSegmenter, vocab_pattern: str | None = None) -> str:
+def word_seg(text: str, ws_driver: 'Any', vocab_pattern: str | None = None) -> str:
     if vocab_pattern:
         escaped = [re.escape(w) for w in vocab_pattern]
         pattern = "|".join(escaped)

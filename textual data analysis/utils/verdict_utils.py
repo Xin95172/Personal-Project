@@ -2,8 +2,10 @@ import os
 import re
 import json
 import shutil
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing
 import pandas as pd
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 
 def ip_law_check(JTITLE_PATTERN: re.Pattern, jtitle: str, jcase: str):
     """
@@ -138,6 +140,42 @@ def j_result_check(
         return "未知"
 
 
+def _process_single_case(file_path, output_folder):
+    from config.patterns import JTITLE_PATTERNS, JTYPE_PATTERNS, MAIN_PATTERNS, JRESULT_PATTERNS, MANUAL_LABELING
+    with open(file_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    jid = data.get("JID", "")
+    jyear = data.get("JYEAR", "")
+    jcase = data.get("JCASE", "")
+    jdate = data.get("JDATE", "")
+    jtitle = data.get("JTITLE", "")
+    jfull = data.get("JFULL", "")
+    jpdf = data.get("JPDF", "")
+
+    ip_law = ip_law_check(JTITLE_PATTERNS, jtitle, jcase)
+    j_type = j_type_check(JTYPE_PATTERNS, jcase, jfull, ip_law, jid)
+    j_result = j_result_check(MAIN_PATTERNS, JRESULT_PATTERNS, jfull, j_type, ip_law, jid)
+    
+    if j_result == "未知":
+        try:
+            j_type = MANUAL_LABELING.get(jid, {}).get("j_type", j_type)
+            j_result = MANUAL_LABELING.get(jid, {}).get("j_result", j_result)
+        except Exception:
+            pass
+
+    return {
+        "JID": jid,
+        "JYEAR": jyear,
+        "JCASE": jcase,
+        "JDATE": jdate,
+        "JTITLE": jtitle,
+        "JPDF": jpdf,
+        "IP Law": ip_law,
+        "JTYPE": j_type,
+        "VERDICT": j_result,
+        # NO JFULL HERE. Zero IPC overhead!
+    }
 def classify_cases(
     input_folder: str,
     output_folder: str,
@@ -146,64 +184,34 @@ def classify_cases(
     MAIN_PATTERNS: dict,
     JRESULT_PATTERNS: dict,
     MANUAL_LABELING: dict,
+    n_jobs: int = -1,
 ):
     """
-    得到分類的 excel，且將 IP_law 的案件複製到 output_folder
+    得到分類的 excel，且將 IP_law 的案件複製到 output_folder (平行運算版)
     """
     os.makedirs(output_folder, exist_ok=True)
     label_file = "judgment_labels.xlsx"
     result_list = []
-
-    for file_name in tqdm(os.listdir(input_folder)):
-        if file_name.endswith(".json"):
+    
+    files_to_process = [f for f in os.listdir(input_folder) if f.endswith(".json")]
+    
+    # 決定 CPU 核心數
+    # 改用 ThreadPoolExecutor 來重疊 macOS 硬碟 I/O 延遲，同時達到零 IPC 通訊成本
+    if n_jobs == 1:
+        for file_name in tqdm(files_to_process, mininterval=0.5, desc="Classifying Cases"):
             file_path = os.path.join(input_folder, file_name)
-
-            with open(file_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            jid = data.get("JID", "")
-            jyear = data.get("JYEAR", "")
-            jcase = data.get("JCASE", "")
-            jdate = data.get("JDATE", "")
-            jtitle = data.get("JTITLE", "")
-            jfull = data.get("JFULL", "")
-            jpdf = data.get("JPDF", "")
-            # print(jid)
-
-            ip_law = ip_law_check(JTITLE_PATTERNS, jtitle, jcase)
-            j_type = j_type_check(JTYPE_PATTERNS, jcase, jfull, ip_law, jid)
-            j_result = j_result_check(MAIN_PATTERNS, JRESULT_PATTERNS, jfull, j_type, ip_law, jid)
-            if (
-                ip_law == True
-                and j_type in ("ADMINISTRATIVE", "CIVIL", "CRIMINAL", "CWC")
-                and j_result in ("勝訴", "敗訴", "部分勝訴/敗訴")
-            ):
-                shutil.copy(file_path, output_folder)
-
-            if j_result == "未知":
-                try:
-                    j_type = MANUAL_LABELING[jid]["j_type"]
-                    j_result = MANUAL_LABELING[jid]["j_result"]
-                except:
-                    pass
-
-            # debug 用
-            # if jid == "SLDM,89,訴,373,20010216,1":
-            #     print(j_result)
-
-            result_list.append(
-                {
-                    "JID": jid,
-                    "JYEAR": jyear,
-                    "JCASE": jcase,
-                    "JDATE": jdate,
-                    "JTITLE": jtitle,
-                    "JPDF": jpdf,
-                    "IP Law": ip_law,
-                    "JTYPE": j_type,
-                    "VERDICT": j_result,
-                }
-            )
+            result = _process_single_case(file_path, output_folder)
+            result_list.append(result)
+    else:
+        max_workers = 32 if n_jobs == -1 else n_jobs * 2
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            from functools import partial
+            func = partial(_process_single_case, output_folder=output_folder)
+            file_paths = [os.path.join(input_folder, f) for f in files_to_process]
+            
+            for res in tqdm(executor.map(func, file_paths, chunksize=50), total=len(file_paths), mininterval=0.5, desc="Classifying Cases"):
+                result_list.append(res)
 
     df = pd.DataFrame(result_list)
-    # df.to_excel(label_file, index = False)
+    return df

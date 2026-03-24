@@ -54,7 +54,7 @@ def extract_fact(jid: str, text: str, SPECIAL_CASES: list) -> str | None:
     #     print(start)
 
     if not start:
-        raise ValueError(f"{jid} has no start match found")
+        return None
     start_idx = start.end()
 
     proc_head = re.search(
@@ -85,7 +85,7 @@ def extract_fact(jid: str, text: str, SPECIAL_CASES: list) -> str | None:
                 start = next_top
                 start_idx = after_proc_idx + next_top.end()
             else:
-                raise ValueError(f"{jid} has no next top found after 程序部分")
+                return None
 
     if jid in SPECIAL_CASES:
         start = start_for_special_cases(jid, text)
