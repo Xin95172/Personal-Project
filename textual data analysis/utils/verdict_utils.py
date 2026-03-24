@@ -157,12 +157,11 @@ def _process_single_case(file_path, output_folder):
     j_type = j_type_check(JTYPE_PATTERNS, jcase, jfull, ip_law, jid)
     j_result = j_result_check(MAIN_PATTERNS, JRESULT_PATTERNS, jfull, j_type, ip_law, jid)
     
-    if j_result == "未知":
-        try:
-            j_type = MANUAL_LABELING.get(jid, {}).get("j_type", j_type)
-            j_result = MANUAL_LABELING.get(jid, {}).get("j_result", j_result)
-        except Exception:
-            pass
+    try:
+        j_type = MANUAL_LABELING.get(jid, {}).get("j_type", j_type)
+        j_result = MANUAL_LABELING.get(jid, {}).get("j_result", j_result)
+    except Exception:
+        pass
 
     return {
         "JID": jid,

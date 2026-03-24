@@ -9,7 +9,17 @@ import matplotlib.pyplot as plt
 # Algorithms
 from algos.svm import SVMClassifier
 from algos.random_forest import RFClassifier
-from algos.MNIR import load_or_fit_feature_splits, summarize_predictions
+
+
+def _load_mnir_functions():
+    try:
+        from algos.MNIR import load_or_fit_feature_splits, summarize_predictions
+    except Exception as exc:
+        raise RuntimeError(
+            "MNIR 功能需要可用的 R / rpy2 環境；目前無法載入 algos.MNIR。"
+        ) from exc
+
+    return load_or_fit_feature_splits, summarize_predictions
 
 def evaluate_all_models(
     dtm_bow_path="../lexicon_resources/dtm_csr_BoW.npz",
@@ -46,6 +56,7 @@ def evaluate_all_models(
     print(f"訓練集大小: {x_train_bow.shape}, 測試集大小: {x_test_bow.shape}")
 
     print("3. 透過 MNIR 轉換特徵 (Feature Extraction)...")
+    load_or_fit_feature_splits, summarize_predictions = _load_mnir_functions()
     feature_res = load_or_fit_feature_splits(
         X_train=x_train_bow,
         y_train=y_train_bow,
