@@ -2,23 +2,51 @@ import os
 import re
 import json
 import shutil
-from concurrent.futures import ProcessPoolExecutor, as_completed
+import concurrent.futures
 import multiprocessing
 import pandas as pd
 from tqdm import tqdm
 
+# 舊的 VERDICT 到新 VERDICT 類別的映射
+VERDICT_MAPPING = {
+    "勝訴": "Win",
+    "敗訴": "Lose",
+    "部分勝訴/敗訴": "Mixed",
+    "和解成功": None,  
+    "部分和解": "Settlement_Partial",
+    "和解失敗": "Settlement_Failure",
+    "發回更審": "Remand",
+    "不受理/程序駁回": "Other",
+    "停止訴訟": "Other",
+    "更正判決": "Other",
+    "移送": "Other",
+    "免訴": "Other",
+    "補充判決": "Other",
+    "程序撤銷": "Other",
+    # 加入已經是英文的目標，讓動態加載的 verdict_mismatches_minimal 可以直接直通
+    "Win": "Win",
+    "Lose": "Lose",
+    "Mixed": "Mixed",
+    "Remand": "Remand",
+    "Settlement_Success": "Settlement_Success",
+    "Settlement_Partial": "Settlement_Partial",
+    "Settlement_Failure": "Settlement_Failure",
+    "Other": "Other"
+}
+
+def map_manual_verdict(manual_result: str, jfull: str) -> str:
+    from config.patterns import MAIN_PATTERNS
+    if manual_result == "和解成功":
+        main_clause = extract_main_clause(MAIN_PATTERNS, jfull)
+        if main_clause and re.search(r"和解成立|調解成立", main_clause):
+            return "Settlement_Success"
+        return "Other"
+    return VERDICT_MAPPING.get(manual_result, "Other")
+
 def ip_law_check(JTITLE_PATTERN: re.Pattern, jtitle: str, jcase: str):
-    """
-    檢查是否為ip案件
-    """
     return JTITLE_PATTERN.search(jtitle) is not None or "智" in jcase
 
-
 def j_type_check(JTYPE_PATTERNS: dict, jcase: str, jfull: str, ip_law: bool, jid):
-    """
-    檢查他是哪種類型的案件，民事、形式、行政、刑附民
-    若他不是ip_law，或是他為裁定則標記為不重要
-    """
     start = re.search(r"主\s*文", jfull)
     if start is not None:
         start_index = start.start()
@@ -27,190 +55,144 @@ def j_type_check(JTYPE_PATTERNS: dict, jcase: str, jfull: str, ip_law: bool, jid
     jfull = jfull[:start_index]
     jfull = re.sub(r"\s+", "", jfull)
 
-    CWC_PATTERNS = JTYPE_PATTERNS["CWC_PATTERNS"]
-    CIVIL_PATTERNS = JTYPE_PATTERNS["CIVIL_PATTERNS"]
-    CRIMINAL_PATTERNS = JTYPE_PATTERNS["CRIMINAL_PATTERNS"]
-    ADMINISTRATIVE_PATTERNS = JTYPE_PATTERNS["ADMINISTRATIVE_PATTERNS"]
-    RULING_PATTERNS = JTYPE_PATTERNS["RULING_PATTERNS"]
-    OTHERS_PATTERNS = JTYPE_PATTERNS["OTHERS_PATTERNS"]
-
-    # debug 用
-    # if jid == "SCDM,99,審智簡,4,20100628,1":
-    #     is_ruling = RULING_PATTERNS.search(jfull)
-    #     is_cwc = CWC_PATTERNS.search(jcase)
-    #     is_civil = CIVIL_PATTERNS.search(jfull)
-    #     is_criminal = CRIMINAL_PATTERNS.search(jfull)
-    #     is_administrative = ADMINISTRATIVE_PATTERNS.search(jfull)
-    #     is_others = OTHERS_PATTERNS.search(jfull)
-
-    #     jfull_preview = jfull.replace('\n', '\\n').replace('\r', '\\r')
-    #     print(f"\n--- Debug JID: {jid} ---")
-    #     print(f"Original JFULL start : {jfull_preview}")
-    #     print(f"RULING_PATTERNS match: {bool(is_ruling)}")
-    #     print(f"CWC_PATTERNS match (jcase): {bool(is_cwc)}")
-    #     print(f"CIVIL_PATTERNS match: {bool(is_civil)}")
-    #     print(f"CRIMINAL_PATTERNS match: {bool(is_criminal)}")
-    #     print(f"ADMINISTRATIVE_PATTERNS match: {bool(is_administrative)}")
-    #     print(f"OTHERS_PATTERNS match: {bool(is_others)}")
-    #     print(f"IP Law check result: {ip_law}")
-
-    if RULING_PATTERNS.search(jfull):
+    if JTYPE_PATTERNS["RULING_PATTERNS"].search(jfull):
         return "RULING"
-    if (CWC_PATTERNS.search(jcase)) or ("刑事附帶民事訴訟" in jfull):
+    if (JTYPE_PATTERNS["CWC_PATTERNS"].search(jcase)) or ("刑事附帶民事訴訟" in jfull):
         return "CWC"
-
-    if (OTHERS_PATTERNS.search(jfull)) or (ip_law is not True):
+    if (JTYPE_PATTERNS["OTHERS_PATTERNS"].search(jfull)) or (ip_law is not True):
         return "不重要"
-    elif CIVIL_PATTERNS.search(jfull):
+    elif JTYPE_PATTERNS["CIVIL_PATTERNS"].search(jfull):
         return "CIVIL"
-    elif CRIMINAL_PATTERNS.search(jfull):
+    elif JTYPE_PATTERNS["CRIMINAL_PATTERNS"].search(jfull):
         return "CRIMINAL"
-    elif ADMINISTRATIVE_PATTERNS.search(jfull):
+    elif JTYPE_PATTERNS["ADMINISTRATIVE_PATTERNS"].search(jfull):
         return "ADMINISTRATIVE"
     else:
         return "未知"
 
-
 def extract_main_clause(MAIN_PATTERNS: dict, jfull: str):
-    """
-    提取主文
-    """
+    if jfull is None or not isinstance(jfull, str):
+        return None
+        
     START_PATTERNS = MAIN_PATTERNS["START_PATTERNS"]
     END_PATTERNS = MAIN_PATTERNS["END_PATTERNS"]
     start = re.search(START_PATTERNS, jfull)
     if not start:
         start = re.search(r"判決如左", jfull)
-        if not start:
-            return None
+        if not start: return None
     start_index = start.end()
-
+    
     end = re.search(END_PATTERNS, jfull[start_index:])
     if end:
-        end_index = start_index + end.start()
-        main_clause = jfull[start_index:end_index]
+        main_clause = jfull[start_index:start_index + end.start()]
     else:
-        main_clause = jfull[start_index:]
-
-    main_clause = main_clause.strip().replace("\r\n", "")
+        # 當找不到明確的理由或事實結尾時，設定硬性長度上限 (1500字)，避免將整篇超過幾萬字的判決書全部送出
+        main_clause = jfull[start_index:start_index + 1500]
+        
+    main_clause = main_clause.strip().replace("\r\n", "").replace("\n", "")
+    # 移除 Excel 所無法接受的不可見 XML 亂碼字元（這會導致 fact_removed_blank 損毀並觸發修復動作）
+    main_clause = re.sub(r"[\x00-\x08\x0b-\x0c\x0e-\x1f]", "", main_clause)
+    
     return main_clause
 
-
-def j_result_check(
-    MAIN_PATTERNS: dict, JRESULT_PATTERNS: dict, jfull: str, j_type: str, ip_law: bool, jid
-):
-    """
-    檢查結果是勝訴、敗訴、部分勝訴/敗訴
-    若不是要取的樣本則標記為不重要
-    """
-    if j_type in ["RULING", "不重要"] or ip_law is False:
-        return "不重要"
-
-    main_clause = extract_main_clause(MAIN_PATTERNS, jfull)
-    if main_clause is None:
-        return "不重要"
-
-    # # debug 用
-    # if jid == "TPBA,94,訴,444,20060427,2":
-    #     print(f"\n--- Debug JID: {jid} in j_result_check ---")
-    #     print(f"JTYPE: {j_type}")
-    #     print(f"IP Law: {ip_law}")
-    #     main_clause_preview = main_clause.replace('\n', '\\n').replace('\r', '\\r')
-    #     print(f"Extracted main_clause : {main_clause_preview}")
-
+def j_result_check(MAIN_PATTERNS, JRESULT_PATTERNS, jfull, j_type, ip_law, jid, main_clause=None):
+    if main_clause is None or (isinstance(main_clause, float) and pd.isna(main_clause)):
+        if jfull is not None:
+            main_clause = extract_main_clause(MAIN_PATTERNS, jfull)
+        else:
+            return "Other"
+    
+    if main_clause is None: return "Other"
+    
     SPECIAL_PATTERNS = JRESULT_PATTERNS.get("SPECIAL_PATTERNS", {})
-    for key, value in SPECIAL_PATTERNS.items():
-        pattern = re.compile(value)
-        if pattern.search(main_clause):
-            return key
+    if re.search(SPECIAL_PATTERNS.get("Remand", r"$^"), main_clause): return "Remand"
 
-    if j_type == "未知":
-        return "j_type == 未知"
+    if j_type == "CIVIL":
+        if re.search(SPECIAL_PATTERNS.get("Settlement_Success", r"$^"), main_clause): return "Settlement_Success"
+        if re.search(SPECIAL_PATTERNS.get("Settlement_Partial", r"$^"), main_clause): return "Settlement_Partial"
+        if re.search(SPECIAL_PATTERNS.get("Settlement_Failure", r"$^"), main_clause): return "Settlement_Failure"
 
-    WIN_PATTERNS = JRESULT_PATTERNS[j_type]["WIN_PATTERNS"]
-    LOSS_PATTERNS = JRESULT_PATTERNS[j_type]["LOSS_PATTERNS"]
-    PARTIAL_PATTERNS = JRESULT_PATTERNS[j_type]["PARTIAL_PATTERNS"]
+    for k, v in SPECIAL_PATTERNS.items():
+        if k not in ["Settlement_Success", "Settlement_Partial", "Settlement_Failure", "Remand"] and re.search(v, main_clause):
+            return "Other"
 
-    if PARTIAL_PATTERNS.search(main_clause):
-        return "部分勝訴/敗訴"
-    elif WIN_PATTERNS.search(main_clause):
-        return "勝訴"
-    elif LOSS_PATTERNS.search(main_clause):
-        return "敗訴"
-    else:
-        return "未知"
+    if j_type in ["RULING", "不重要"] or not ip_law: return "Other"
+    if j_type not in JRESULT_PATTERNS: return "Other"
 
+    patterns = JRESULT_PATTERNS[j_type]
+    if re.search(patterns.get("PARTIAL_PATTERNS", r"$^"), main_clause): return "Mixed"
+    if re.search(patterns.get("WIN_PATTERNS", r"$^"), main_clause): return "Win"
+    if re.search(patterns.get("LOSS_PATTERNS", r"$^"), main_clause): return "Lose"
+    return "Other"
+
+def apply_verdict_rules(df, MAIN_PATTERNS, JRESULT_PATTERNS):
+    """
+    對 DataFrame 進行批次標籤判定，主要用於暖啟動（從緩存載入時）。
+    """
+    def _row_check(row):
+        return j_result_check(
+            MAIN_PATTERNS, JRESULT_PATTERNS, 
+            jfull=None, # 當提供 main_clause 時不需要 jfull
+            j_type=row["JTYPE"], 
+            ip_law=row["IP Law"], 
+            jid=row["JID"], 
+            main_clause=row["main_clause"]
+        )
+    
+    df["VERDICT"] = df.apply(_row_check, axis=1)
+    return df
 
 def _process_single_case(file_path, output_folder):
+    # 局部 import 利用快取，且避開多進程序列化問題
     from config.patterns import JTITLE_PATTERNS, JTYPE_PATTERNS, MAIN_PATTERNS, JRESULT_PATTERNS, MANUAL_LABELING
-    with open(file_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    from utils.role_extractor import extract_role_features
+    try:
+        if os.path.getsize(file_path) == 0: return None
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except: return None
 
-    jid = data.get("JID", "")
-    jyear = data.get("JYEAR", "")
-    jcase = data.get("JCASE", "")
-    jdate = data.get("JDATE", "")
-    jtitle = data.get("JTITLE", "")
-    jfull = data.get("JFULL", "")
-    jpdf = data.get("JPDF", "")
-
+    jid, jtitle, jcase, jfull = data.get("JID", ""), data.get("JTITLE", ""), data.get("JCASE", ""), data.get("JFULL", "")
     ip_law = ip_law_check(JTITLE_PATTERNS, jtitle, jcase)
     j_type = j_type_check(JTYPE_PATTERNS, jcase, jfull, ip_law, jid)
+    main_clause = extract_main_clause(MAIN_PATTERNS, jfull)
     j_result = j_result_check(MAIN_PATTERNS, JRESULT_PATTERNS, jfull, j_type, ip_law, jid)
-    
-    try:
-        j_type = MANUAL_LABELING.get(jid, {}).get("j_type", j_type)
-        j_result = MANUAL_LABELING.get(jid, {}).get("j_result", j_result)
-    except Exception:
-        pass
 
+    if jid in MANUAL_LABELING:
+        m = MANUAL_LABELING[jid]
+        j_type = m.get("j_type", j_type)
+        if "j_result" in m: j_result = map_manual_verdict(m["j_result"], jfull)
+
+    role_f = extract_role_features(jfull, j_type)
     return {
-        "JID": jid,
-        "JYEAR": jyear,
-        "JCASE": jcase,
-        "JDATE": jdate,
-        "JTITLE": jtitle,
-        "JPDF": jpdf,
-        "IP Law": ip_law,
-        "JTYPE": j_type,
-        "VERDICT": j_result,
-        # NO JFULL HERE. Zero IPC overhead!
+        "JID": jid, "JYEAR": data.get("JYEAR",""), "JCASE": jcase, "JDATE": data.get("JDATE",""),
+        "JTITLE": jtitle, "JPDF": data.get("JPDF",""), "IP Law": ip_law, "JTYPE": j_type,
+        "VERDICT": str(j_result), "main_clause": main_clause,
+        **{k: role_f.get(k, False) for k in ["plaintiff_is_company", "defendant_is_company", "appellant_is_company", "appellee_is_company", "complainant_is_company", "victim_is_company", "prosecutor_present", "company_vs_company", "company_involved", "company_vs_individual", "individual_vs_company", "company_as_victim_only", "company_as_defendant_only", "is_civil", "is_pure_criminal", "is_attached_civil", "is_admin", "is_appeal", "is_first_instance", "is_summary_case", "claim_damages", "claim_injunction", "claim_destroy_goods", "claim_validity_review", "claim_admin_cancellation"]}
     }
+
 def classify_cases(
     input_folder: str,
     output_folder: str,
-    JTITLE_PATTERNS: re.Pattern,
-    JTYPE_PATTERNS: dict,
-    MAIN_PATTERNS: dict,
-    JRESULT_PATTERNS: dict,
-    MANUAL_LABELING: dict,
+    JTITLE_PATTERNS=None,
+    JTYPE_PATTERNS=None,
+    MAIN_PATTERNS=None,
+    JRESULT_PATTERNS=None,
+    MANUAL_LABELING=None,
     n_jobs: int = -1,
 ):
     """
-    得到分類的 excel，且將 IP_law 的案件複製到 output_folder (平行運算版)
+    判決書分類。Patterns 參數保留以相容呼叫端，
+    但實際由 _process_single_case 內部 import 取得（利用 sys.modules 快取）。
     """
     os.makedirs(output_folder, exist_ok=True)
-    label_file = "judgment_labels.xlsx"
-    result_list = []
-    
-    files_to_process = [f for f in os.listdir(input_folder) if f.endswith(".json")]
-    
-    # 決定 CPU 核心數
-    # 改用 ThreadPoolExecutor 來重疊 macOS 硬碟 I/O 延遲，同時達到零 IPC 通訊成本
-    if n_jobs == 1:
-        for file_name in tqdm(files_to_process, mininterval=0.5, desc="Classifying Cases"):
-            file_path = os.path.join(input_folder, file_name)
-            result = _process_single_case(file_path, output_folder)
-            result_list.append(result)
-    else:
-        max_workers = 32 if n_jobs == -1 else n_jobs * 2
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            from functools import partial
-            func = partial(_process_single_case, output_folder=output_folder)
-            file_paths = [os.path.join(input_folder, f) for f in files_to_process]
-            
-            for res in tqdm(executor.map(func, file_paths, chunksize=50), total=len(file_paths), mininterval=0.5, desc="Classifying Cases"):
-                result_list.append(res)
+    files = [os.path.join(input_folder, f) for f in os.listdir(input_folder) if f.endswith(".json")]
 
-    df = pd.DataFrame(result_list)
-    return df
+    # 針對大量小檔案 I/O 密集型任務，ThreadPoolExecutor 表現更優
+    max_workers = 32 if n_jobs == -1 else n_jobs
+    from functools import partial
+    func = partial(_process_single_case, output_folder=output_folder)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        results = list(tqdm(executor.map(func, files), total=len(files), mininterval=1, desc="Classifying Cases"))
+
+    return pd.DataFrame([r for r in results if r])
