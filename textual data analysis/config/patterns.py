@@ -5,7 +5,7 @@ JTITLE_PATTERNS = re.compile(
 
 MAIN_PATTERNS = {
     "START_PATTERNS": re.compile(r"主\s*(\?{0,2})?文", re.DOTALL),
-    "END_PATTERNS": re.compile(r"(\n\s+|\s+)(事\s*實|理\s*由|附\s*錄|事實及理由)"),
+    "END_PATTERNS": re.compile(r"(\n\s+|\s+|\d+)(事\s*實|理\s*由|附\s*錄|事實及理由)"),
 }
 JTYPE_PATTERNS = {
     "CWC_PATTERNS": re.compile(r"附民|台附|刑事附帶民事訴訟"),
@@ -32,14 +32,14 @@ JRESULT_PATTERNS = {
             r"(?:未達成和解|尚未達成和解|仍未達成和解)|"
             r"(?:和解|調解)(?:不成立|破裂)"
         ),
-        "Remand": re.compile(r"(撤銷發回|發回(?:更審|原審)|發交(?:更審|原審)|廢棄發回|原判決廢棄，發回)"),
+        "Remand": re.compile(r"撤銷發回|發回(?:更審|原審)|發交(?:更審|原審)|廢棄發回|原判決廢棄，發回|廢棄[，。]\s*發回|廢棄[，。]\s*發交|原判決.{0,30}?撤銷[，。]\s*發回|本件發回|發交智慧財產|依判決前之程序更為審判|廢棄部分發回|撤銷，發回"),
         # 其他程序性特殊情況
         "不受理/程序駁回": re.compile(
-            r"不受理|駁回之訴|管轄錯誤|程序不合法|不予准許|駁回聲請|駁回抗告|訴訟駁回|關於訴訟程序違背法令部分撤銷|再審之訴駁回|假執行之聲請均駁回"
+            r"不受理|駁回之訴|管轄錯誤|程序不合法|不予准許|駁回聲請|駁回抗告|訴訟駁回|關於訴訟程序違背法令部分撤銷|再審之訴駁回"
         ),
         "停止訴訟": re.compile(r"停止訴訟|裁定停止訴訟"),
         "更正判決": re.compile(
-            r"判決，應更正|原判決.{0,50}?撤銷。前開撤銷部分.{0,50}?處.{0,50}?所示之刑|判決廢棄"
+            r"判決，應更正"
         ),
         "移送": re.compile(r"移送於"),
         "免訴": re.compile(r"本件免訴|甲○○免訴|，免訴"),
@@ -51,7 +51,12 @@ JRESULT_PATTERNS = {
             r"(被告|被上訴人|相對人)(應|應於)?(?:連帶)?.{0,50}?(給付|各給付)|"
             r"訴訟費用.{0,50}?由被告(連帶|等)?.{0,50}?(負擔|平均負擔)|"
             r"(應將註冊第.{0,50}?商標.{0,50}?移轉登記予(原告|上訴人))|(確認.{0,50}?為.{0,50}?商標權人)|"
-            r"(主張成立|契約關係成立)"
+            r"(主張成立|契約關係成立)|"
+            r"確認.{0,80}?為上訴人所有|被上訴人應將.{0,100}?為上訴人所有|"
+            r"確認.{0,80}?(?:未享有著作財產權|法律關係不存在)|"
+            r"(?:法律關係|授權契約關係)不存在|"
+            r"確認上訴人[^。]{0,100}?申請權人|"
+            r"被上訴人.{0,30}?應將.{0,100}?(?:移轉予|返還予|變更登記為)上訴人"
         ),
         "LOSS_PATTERNS": re.compile(
             r"(敗訴|無理由|駁回|均無理由|駁回其訴|及假執行均駁回|駁回其請求)|駁回原告之訴|駁回上訴|"
@@ -61,7 +66,7 @@ JRESULT_PATTERNS = {
             r"(?:部分|一部)(?:勝訴|有理由|應予給付|准許)|"
             r"就.{0,50}?部分(?:勝訴|有理由|准許)|駁回(?:部分|一部)(?:之訴|請求)|駁回部分|"
             r"被告[應]?連帶(負擔|給付).{0,50}?(其餘由原告負擔|原告其餘假執行之聲請駁回)|"
-            r"原告其餘之訴駁回|其餘上訴駁回",
+            r"其餘之訴.{0,30}?駁回|其餘上訴駁回|(?:兩造|與被上訴人)共有",
             re.DOTALL,
         ),
     },
@@ -74,19 +79,19 @@ JRESULT_PATTERNS = {
             r"處(?:有期徒刑|拘役|罰金|如附表.{0,50}?所示之刑)|"
             r"科(?:罰金|拘役)|併科罰金|罪刑|應執行刑|"
             r"執行(?:有期徒刑|拘役|罰金|如附表所示之刑)|"
-            r"均沒收(之)?|上訴駁回|公訴不受理|自訴不受理|本件公訴不受理"
+            r"均沒收(之)?|上訴駁回|上訴均駁回|公訴不受理|自訴不受理|本件公訴不受理"
         ),
         "PARTIAL_PATTERNS": re.compile(
             r"就.{0,50}?部分(?:有罪|無罪)|(?:部分|一部)(?:有罪|無罪)|(?:部分|一部)駁回(?:公訴|自訴)"
         ),
     },
     "ADMINISTRATIVE": {
-        "WIN_PATTERNS": re.compile(r"(?:原處分|訴願決定).{0,50}?(?:撤銷|廢棄|均撤銷|應予撤銷|應予廢棄)"),
+        "WIN_PATTERNS": re.compile(r"(?:原處分|訴願決定).{0,50}?(?:撤銷|廢棄|均撤銷|應予撤銷|應予廢棄)|(?:處分|決定).{0,100}?均撤銷|之處分.{0,5}?應予撤銷"),
         "LOSS_PATTERNS": re.compile(
             r"(?:維持|確定|合於規定)|訴(均|之)?駁回|聲請駁回|駁回原告之訴|上訴駁回"
         ),
         "PARTIAL_PATTERNS": re.compile(
-            r"(?:部分|一部)(?:撤銷|廢棄|維持|駁回)|就.{0,50}?部分(?:撤銷|廢棄|維持)|訴願決定"
+            r"(?:部分|一部)(?:撤銷|廢棄|維持|駁回)|就.{0,50}?部分(?:撤銷|廢棄|維持)|另為(?:處分|審定|核處|作成)|其餘之訴.{0,30}?駁回"
         ),
     },
     # 刑事附帶民事 (CWC)
@@ -109,7 +114,8 @@ JRESULT_PATTERNS = {
         ),
         "PARTIAL_PATTERNS": re.compile(
             r"(?:部分|一部)(?:有罪|無罪)|就.{0,50}?部分(?:有罪|無罪)|"
-            r"(?:部分|一部)駁回(?:附帶民事訴訟|請求)|駁回部分附帶民事訴訟"
+            r"(?:部分|一部)駁回(?:附帶民事訴訟|請求)|駁回部分附帶民事訴訟|"
+            r"其餘之訴.{0,30}?駁回"
         ),
     },
     # 其他類型 (RULING, OTHERS 等)
@@ -129,7 +135,6 @@ MANUAL_LABELING = {
     "KSDM,100,審智簡附民,30,20111031,1": {"j_type": "CWC", "j_result": "不受理/程序駁回"},
     "TPSM,113,台非,62,20240613,1": {"j_type": "CRIMINAL", "j_result": "發回更審"},
     "PCDM,94,簡,4369,20051017,1": {"j_type": "CRIMINAL", "j_result": "勝訴"},
-    "TYDV,94,智,6,20061101,2": {"j_type": "CIVIL", "j_result": "敗訴"},
     "TYDV,94,智,6,20061101,1": {"j_type": "CIVIL", "j_result": "敗訴"},
     "TYDV,94,智,6,20061101,2": {"j_type": "CIVIL", "j_result": "敗訴"},
     "IPCV,103,民商上更(二),1,20190430,2": {"j_type": "CIVIL", "j_result": "部分勝訴/敗訴"},
@@ -139,13 +144,95 @@ MANUAL_LABELING = {
     "TNDM,99,智簡上附民,1,20100909,1": {"j_type": "CWC", "j_result": "部分勝訴/敗訴"},
     "CHDM,111,智簡,9,20220406,1": {"j_type": "CRIMINAL", "j_result": "部分和解"},
     "IPCM,113,刑智上訴,19,20241024,1": {"j_type": "CRIMINAL", "j_result": "更正判決"},
+    "TCDM,111,智附民,14,20221012,1": {"j_type": "CWC", "j_result": "部分勝訴/敗訴"},
+    "TCDM,111,智附民,15,20221012,1": {"j_type": "CWC", "j_result": "部分勝訴/敗訴"},
     "IPCV,108,民專訴,2,20200107,5": {"j_type": "CIVIL", "j_result": "勝訴"},
     "IPCV,108,民著上更(三),7,20200730,1": {"j_type": "CIVIL", "j_result": "敗訴"},
     "IPCA,108,行商訴,55,20191212,2": {"j_type": "ADMINISTRATIVE", "j_result": "勝訴"},
     "TPHM,90,上易,1192,20030430,2": {"j_type": "CRIMINAL", "j_result": "免訴"},
     "IPCV,106,民專訴,43,20181001,3": {"j_type": "CIVIL", "j_result": "補充判決"},
     "TPSM,101,台非,77,20120307": {"j_type": "CRIMINAL", "j_result": "程序撤銷"},
-    "TPHM,90,上易,1192,20030430,2": {"j_type": "CRIMINAL", "j_result": "免訴"},
-    "": {"j_type": "", "j_result": ""},
-    "": {"j_type": "", "j_result": ""},
+    # ── 以下為 ADMINISTRATIVE 偽 Win 修正（main_clause 超出主文範圍，WIN pattern 誤觸理由段）──
+    "IPCA,108,行專訴,79,20200529,4": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,106,行商訴,162,20180430,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,109,行專訴,43,20210428,3": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,109,行專訴,21,20201130,3": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,106,行商訴,130,20180329,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,108,行專訴,78,20200630,4": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,103,行商訴,100,20141127,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,109,行商更(一),2,20201008,1": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,106,行專訴,44,20180227,4": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,108,行專訴,17,20190829,3": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,109,行商訴,90,20210129,1": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,109,行商訴,1,20200617,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,108,行商訴,143,20200622,1": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,104,行專訴,97,20160615,3": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,108,行商訴,98,20200224,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,109,行商訴,36,20201022,1": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,103,行專訴,62,20141022,3": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,109,行商訴,92,20210129,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "TPBA,96,訴,1401,20080130,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,109,行商訴,89,20201228,1": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,108,行商訴,9,20190827,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,109,行商訴,12,20201118,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,107,行專訴,97,20190716,3": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,109,行商訴,49,20201029,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,104,行商訴,148,20160624,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,107,行專訴,71,20190716,3": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,108,行著訴,6,20200519,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,108,行商訴,113,20200529,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,107,行專訴,80,20190321,3": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,109,行商訴,71,20210129,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,108,行商訴,47,20191128,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,105,行商訴,52,20161121,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,108,行專訴,77,20200617,3": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,108,行商訴,40,20190923,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,108,行商訴,124,20200519,1": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,102,行專訴,77,20131120,3": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,109,行商訴,15,20200723,1": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,106,行專訴,47,20180227,3": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,108,行專訴,44,20200115,3": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,98,行商訴,177,20100128,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,103,行商訴,67,20141119,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "TPBA,96,訴,1475,20080130,2": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    "IPCA,107,行專訴,76,20190418,3": {"j_type": "ADMINISTRATIVE", "j_result": "部分勝訴/敗訴"},
+    "IPCA,107,行專訴,83,20190418,3": {"j_type": "ADMINISTRATIVE", "j_result": "部分勝訴/敗訴"},
+    # ── 以下為 CIVIL 偽 Settlement_Success 修正（main_clause 超出主文範圍，調解成立出現於理由段）──
+    "IPCV,108,民專訴,36,20190816,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,109,民專訴,7,20200605,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    # ── 以下為 CIVIL 偽 Win 修正（main_clause 超出主文，原告之訴駁回案件因理由段引用原告聲明而誤觸 WIN pattern）──
+    "IPCV,109,民著訴,74,20210305,1": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,109,民專訴,34,20201027,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,109,民專訴,68,20201120,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,108,民著訴,64,20200131,1": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,106,民專訴,70,20180817,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,107,民專訴,104,20190531,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,107,民商訴,54,20190510,1": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,108,民專訴,86,20200214,1": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,109,民專訴,102,20210312,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,107,民專訴,20,20190326,3": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,109,民專訴,62,20201204,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,108,民營訴,2,20200113,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,109,民專訴,87,20210129,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,105,民專訴,8,20170714,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,108,民專訴,53,20200529,3": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,108,民專訴,46,20191231,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,109,民專訴,45,20210430,3": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,108,民專訴,87,20200605,3": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,108,民專訴,59,20200215,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,107,民商訴,47,20190906,1": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,102,民專訴,96,20150123,3": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,108,民專訴,100,20200430,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,108,民著訴,25,20190408,1": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,107,民專訴,110,20200430,3": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,107,民專訴,72,20190802,2": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,108,民著訴,8,20190329,1": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,109,民著訴,49,20201231,1": {"j_type": "CIVIL", "j_result": "敗訴"},
+    "IPCV,109,民商訴,13,20200810,1": {"j_type": "CIVIL", "j_result": "敗訴"},
+    # ── 以下為 ADMINISTRATIVE 錯誤 Remand 修正 ──
+    # 更審後判決主文為「原告之訴駁回」，無發回語言，應為 Lose
+    "IPCA,102,行專更(一),2,20141016,3": {"j_type": "ADMINISTRATIVE", "j_result": "敗訴"},
+    # 更審後主文為「訴願決定撤銷。原告其餘之訴駁回。」，部分勝訴，應為 Mixed
+    "TPBA,94,訴更一,136,20060406,2": {"j_type": "ADMINISTRATIVE", "j_result": "部分勝訴"},
 }
+                                                                         

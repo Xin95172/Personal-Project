@@ -145,4 +145,6 @@ def get_dtm_BoW(
     return dtm, dtm_sparse, doc_ids, vocab, delete_set
 
 def get_verdict_results(doc_ids: np.ndarray, labels: pd.DataFrame) -> pd.DataFrame:
-    return labels.loc[doc_ids, ["JRESULT"]]
+    # 支援新版 VERDICT 欄位名稱（舊版為 JRESULT）
+    col = "VERDICT" if "VERDICT" in labels.columns else "JRESULT"
+    return labels.loc[doc_ids, [col]]

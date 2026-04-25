@@ -55,8 +55,14 @@ def j_type_check(JTYPE_PATTERNS: dict, jcase: str, jfull: str, ip_law: bool, jid
     jfull = jfull[:start_index]
     jfull = re.sub(r"\s+", "", jfull)
 
-    if JTYPE_PATTERNS["RULING_PATTERNS"].search(jfull):
+    # ─── RULING 位置修正：「裁定」出現在「判決」之前才算真正的裁定 ───
+    # 判決書內文常常引用到裁定，需排除這類誤判
+    pos_crd = jfull.find("裁定")
+    pos_jud = jfull.find("判決")
+    if pos_crd >= 0 and (pos_jud < 0 or pos_crd < pos_jud):
         return "RULING"
+    # ─────────────────────────────────────────────────────────────────
+
     if (JTYPE_PATTERNS["CWC_PATTERNS"].search(jcase)) or ("刑事附帶民事訴訟" in jfull):
         return "CWC"
     if (JTYPE_PATTERNS["OTHERS_PATTERNS"].search(jfull)) or (ip_law is not True):
@@ -92,6 +98,8 @@ def extract_main_clause(MAIN_PATTERNS: dict, jfull: str):
     main_clause = main_clause.strip().replace("\r\n", "").replace("\n", "")
     # 移除 Excel 所無法接受的不可見 XML 亂碼字元（這會導致 fact_removed_blank 損毀並觸發修復動作）
     main_clause = re.sub(r"[\x00-\x08\x0b-\x0c\x0e-\x1f]", "", main_clause)
+    # 壓縮 CJK 字元之間的多餘空白（修正 PDF 轉換產生的 "無　　罪" 類問題，避免 WIN/LOSS pattern 無法命中）
+    main_clause = re.sub(r"(?<=[^\x00-\x7F])[ \t]+(?=[^\x00-\x7F])", "", main_clause)
     
     return main_clause
 
@@ -174,25 +182,20 @@ def _process_single_case(file_path, output_folder):
 def classify_cases(
     input_folder: str,
     output_folder: str,
-    JTITLE_PATTERNS=None,
-    JTYPE_PATTERNS=None,
-    MAIN_PATTERNS=None,
-    JRESULT_PATTERNS=None,
-    MANUAL_LABELING=None,
     n_jobs: int = -1,
 ):
     """
     判決書分類。Patterns 參數保留以相容呼叫端，
     但實際由 _process_single_case 內部 import 取得（利用 sys.modules 快取）。
     """
-    os.makedirs(output_folder, exist_ok=True)
+    import concurrent.futures
     files = [os.path.join(input_folder, f) for f in os.listdir(input_folder) if f.endswith(".json")]
-
-    # 針對大量小檔案 I/O 密集型任務，ThreadPoolExecutor 表現更優
-    max_workers = 32 if n_jobs == -1 else n_jobs
-    from functools import partial
-    func = partial(_process_single_case, output_folder=output_folder)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        results = list(tqdm(executor.map(func, files), total=len(files), mininterval=1, desc="Classifying Cases"))
-
-    return pd.DataFrame([r for r in results if r])
+    max_workers = None if n_jobs == -1 else (n_jobs if n_jobs > 0 else 1)
+    results = []
+    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_process_single_case, f, output_folder): f for f in files}
+        for future in tqdm(concurrent.futures.as_completed(futures), total=len(files), desc="Classifying Cases"):
+            result = future.result()
+            if result:
+                results.append(result)
+    return pd.DataFrame(results)
