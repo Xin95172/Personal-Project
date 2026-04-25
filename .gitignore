@@ -1,5 +1,6 @@
 /textual data analysis/data
 /textual data analysis/artifacts/models/best_model.pt
+/textual data analysis/artifacts/cache
 /投資組合競賽/data
 **/__pycache__/
 *.pyc
