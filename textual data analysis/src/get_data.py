@@ -10,7 +10,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def clean_filename(filename):
     """移除檔名中的非法字元"""
-    return re.sub(r'[\/:*?"<>|]', '', filename)
+    return re.sub(r'[\\/:*?"<>|]', '', filename)
 
 def generate_date_range(start_year, start_month, end_year, end_month):
     """生成 YYYY-MM 格式的日期列表"""
@@ -19,7 +19,7 @@ def generate_date_range(start_year, start_month, end_year, end_month):
     end_date = datetime(end_year, end_month, 1)
     
     while current_date <= end_date:
-        year_month = current_date.strftime("%Y-%m")
+        year_month = current_date.strftime('%Y-%m')
         dates.append(year_month)
 
         if current_date.month == 12:
@@ -37,11 +37,11 @@ def _process_single_json(file_info):
     """
     file_path, output_dir, keyword = file_info
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         # 檢查內容是否符合關鍵字 (通常在 JFULL 欄位)
-        if "JFULL" in data and keyword in data["JFULL"]:
+        if 'JFULL' in data and keyword in data['JFULL']:
             f_name = os.path.basename(file_path)
             new_path = os.path.join(output_dir, f_name)
             shutil.copy2(file_path, new_path)
@@ -60,7 +60,7 @@ class JudicialLoader:
         """
         self.headers = headers
 
-    def download_rar_files(self, url_range, year_months, download_folder="../data/rar_files"):
+    def download_rar_files(self, url_range, year_months, download_folder='../data/rar_files'):
         """
         從司法院 Open Data API 下載 RAR 資源，具備進度條顯示
         """
@@ -68,8 +68,8 @@ class JudicialLoader:
         
         print(f"--- 開始下載原始 RAR 資源 (共 {len(url_range)} 個月份) ---")
         for n in range(min(len(url_range), len(year_months))):
-            url = f"https://opendata.judicial.gov.tw/api/FilesetLists/{url_range[n]}/file"
-            file_name = f"{year_months[n]}裁判書.rar"
+            url = f'https://opendata.judicial.gov.tw/api/FilesetLists/{url_range[n]}/file'
+            file_name = f'{year_months[n]}裁判書.rar'
             file_path = os.path.join(download_folder, file_name)
 
             if os.path.exists(file_path):
@@ -82,7 +82,7 @@ class JudicialLoader:
                 
                 total_size = int(response.headers.get('content-length', 0))
                 
-                with open(file_path, "wb") as f, tqdm(
+                with open(file_path, 'wb') as f, tqdm(
                     desc=f"Downloading {file_name}",
                     total=total_size,
                     unit='B',
@@ -98,11 +98,11 @@ class JudicialLoader:
                 print(f"\n{file_name} 下載失敗，錯誤：{e}")
 
     def extract_and_filter_json(self, 
-                               rar_dir="../data/rar_files", 
-                               unrar_base_dir="../data/unrar_files", 
-                               output_dir="../data/raw_json", 
-                               keyword="智慧財產",
-                               seven_zip_path=r"C:\Program Files\7-Zip\7z.exe",
+                               rar_dir='../data/rar_files', 
+                               unrar_base_dir='../data/unrar_files', 
+                               output_dir='../data/raw_json', 
+                               keyword='智慧財產',
+                               seven_zip_path=r'C:\Program Files\7-Zip\7z.exe',
                                cleanup_rar=True,
                                max_workers=None):
         """
@@ -111,7 +111,7 @@ class JudicialLoader:
         os.makedirs(unrar_base_dir, exist_ok=True)
         os.makedirs(output_dir, exist_ok=True)
 
-        rar_files = [f for f in os.listdir(rar_dir) if f.endswith(".rar")]
+        rar_files = [f for f in os.listdir(rar_dir) if f.endswith('.rar')]
         
         print(f"\n--- 開始解析與過濾 JSON (總共 {len(rar_files)} 個 RAR) ---")
         for file in rar_files:
@@ -121,7 +121,7 @@ class JudicialLoader:
             try:
                 # 1. 執行解壓縮
                 subprocess.run(
-                    [seven_zip_path, "x", rar_file, f"-o{unrar_base_dir}", "-y"],
+                    [seven_zip_path, 'x', rar_file, f'-o{unrar_base_dir}', '-y'],
                     check=True, stdout=subprocess.DEVNULL
                 )
             except Exception as e:
@@ -132,7 +132,7 @@ class JudicialLoader:
             json_files = []
             for root, _, files in os.walk(unrar_base_dir):
                 for f_name in files:
-                    if f_name.endswith(".json"):
+                    if f_name.endswith('.json'):
                         json_files.append((os.path.join(root, f_name), output_dir, keyword))
 
             # 3. 使用多進程進行平行搜尋
@@ -163,14 +163,14 @@ class JudicialLoader:
         """一鍵式完整流程"""
         self.download_rar_files(
             url_range, year_months, 
-            download_folder=kwargs.get('rar_dir', "../data/rar_files")
+            download_folder=kwargs.get('rar_dir', '../data/rar_files')
         )
         self.extract_and_filter_json(
-            rar_dir=kwargs.get('rar_dir', "../data/rar_files"),
-            unrar_base_dir=kwargs.get('unrar_dir', "../data/unrar_files"),
-            output_dir=kwargs.get('output_dir', "../data/raw_json"),
-            keyword=kwargs.get('keyword', "智慧財產"),
-            seven_zip_path=kwargs.get('7z_path', r"C:\Program Files\7-Zip\7z.exe"),
+            rar_dir=kwargs.get('rar_dir', '../data/rar_files'),
+            unrar_base_dir=kwargs.get('unrar_dir', '../data/unrar_files'),
+            output_dir=kwargs.get('output_dir', '../data/raw_json'),
+            keyword=kwargs.get('keyword', '智慧財產'),
+            seven_zip_path=kwargs.get('7z_path', r'C:\Program Files\7-Zip\7z.exe'),
             cleanup_rar=kwargs.get('cleanup_rar', True),
             max_workers=kwargs.get('max_workers', None)
         )

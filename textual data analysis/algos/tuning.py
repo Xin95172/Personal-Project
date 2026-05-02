@@ -41,7 +41,7 @@ def tune_with_val(
         score = f1_score(
             y_val_1d,
             np.asarray(pred_val).ravel(),
-            average="macro",
+            average='macro',
             zero_division=0,
         )
 

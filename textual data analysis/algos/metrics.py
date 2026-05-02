@@ -26,6 +26,6 @@ def evaluate_metrics(
         cm = confusion_matrix(y_true, y_pred, labels = labels)
         print(pd.DataFrame(
             cm,
-            index = pd.Index(labels, name = "True"),
-            columns = pd.Index(labels, name = "Predicted")
+            index = pd.Index(labels, name = 'True'),
+            columns = pd.Index(labels, name = 'Predicted')
         ))

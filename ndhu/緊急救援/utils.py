@@ -148,6 +148,7 @@ def difference_test_table(
     test_vars: list[str],
     groups: dict[str, pd.Series],
     diffs: list[tuple[str, str]] | None = None,
+    decimals: int = 3,
 ) -> pd.DataFrame:
     """通用差異性檢定表
 
@@ -157,6 +158,7 @@ def difference_test_table(
     groups : {組別名稱: 布林遮罩}，例如 {'有議合': df['engagement_t'] == 1}
     diffs : 要做差異檢定的配對，例如 [('有議合', '無議合')]
             若未指定，不產生差異欄
+    decimals : 小數點後顯示位數
     """
     from scipy.stats import ttest_ind, ranksums
 
@@ -170,8 +172,8 @@ def difference_test_table(
         for name, sub in subsets.items():
             s = sub[var].dropna()
             data[name] = s
-            row[(name, 'mean')] = s.mean()
-            row[(name, 'median')] = s.median()
+            row[(name, 'mean')] = round(s.mean(), decimals)
+            row[(name, 'median')] = round(s.median(), decimals)
 
         if diffs:
             for name_a, name_b in diffs:
@@ -179,11 +181,186 @@ def difference_test_table(
                 _, p_t = ttest_ind(a, b, equal_var=False)
                 _, p_r = ranksums(a, b)
                 label = f'{name_a}-{name_b}'
-                row[(label, 'mean')] = f'{a.mean() - b.mean():.4f}{_stars(p_t)}'
-                row[(label, 'median')] = f'{a.median() - b.median():.4f}{_stars(p_r)}'
+                
+                mean_diff = a.mean() - b.mean()
+                median_diff = a.median() - b.median()
+                
+                row[(label, 'mean')] = f'{mean_diff:.{decimals}f}{_stars(p_t)}'
+                row[(label, 'mean_p')] = round(p_t, decimals)
+                row[(label, 'median')] = f'{median_diff:.{decimals}f}{_stars(p_r)}'
+                row[(label, 'median_p')] = round(p_r, decimals)
 
         rows.append(row)
 
     result = pd.DataFrame(rows, index=test_vars)
     result.columns = pd.MultiIndex.from_tuples(result.columns)
     return result
+
+
+def corr_table(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    """產生帶有顯著性星號的相關係數矩陣 (Correlation Matrix)
+    左下角為 Pearson 相關係數，右上角為 Spearman 等級相關係數。
+
+    Parameters
+    ----------
+    df : 資料集
+    cols : 要計算相關係數的變數清單
+    """
+    import numpy as np
+    from scipy.stats import t
+    
+    # 確保資料沒有 NaN
+    df_clean = df[cols].dropna()
+    n = len(df_clean)
+    
+    # 1. 向量化計算相關係數 (Pandas 底層有高度優化，極快)
+    r_pearson = df_clean.corr(method='pearson').values
+    r_spearman = df_clean.corr(method='spearman').values
+    
+    # 2. 向量化計算 P-value (利用 numpy 矩陣運算計算 t 統計量)
+    # 避免對角線 r=1 導致分母為 0，限制數值上限
+    r_p_safe = np.clip(r_pearson, -0.999999, 0.999999)
+    t_pearson = r_p_safe * np.sqrt((n - 2) / (1 - r_p_safe**2))
+    p_pearson = t.sf(np.abs(t_pearson), n - 2) * 2
+    
+    r_s_safe = np.clip(r_spearman, -0.999999, 0.999999)
+    t_spearman = r_s_safe * np.sqrt((n - 2) / (1 - r_s_safe**2))
+    p_spearman = t.sf(np.abs(t_spearman), n - 2) * 2
+    
+    # 3. 填入 DataFrame
+    corr = pd.DataFrame(index=cols, columns=cols)
+    
+    # 這裡的迴圈只負責「字串排版」，不需要做繁重的統計運算，瞬間就能跑完
+    for i in range(len(cols)):
+        for j in range(len(cols)):
+            col_i, col_j = cols[i], cols[j]
+            if i == j:
+                corr.loc[col_i, col_j] = "1.000"
+            elif i > j:
+                corr.loc[col_i, col_j] = f"{r_pearson[i, j]:.3f}{_stars(p_pearson[i, j])}"
+            else:
+                corr.loc[col_i, col_j] = f"{r_spearman[i, j]:.3f}{_stars(p_spearman[i, j])}"
+                
+    return corr
+
+
+
+# ============================
+# 視覺化
+# ============================
+
+def plot_desc_bar(
+    df: pd.DataFrame,
+    cols: list[str],
+    demean: bool = False,
+    title: str = '',
+    figsize: tuple[int, int] = (14, 6),
+    save_path: str | None = None,
+    ax=None,
+):
+    """畫指定變數的 mean 長條圖
+
+    Parameters
+    ----------
+    df : 原始資料（會自動算 mean）
+    cols : 要畫的欄位名稱
+    demean : 若 True，每個變數先減去這組變數的平均值，突顯相對起伏
+    title : 圖表標題
+    save_path : 存檔路徑（.png），None 則不存檔
+    ax : 指定 matplotlib Axes 物件 (畫子圖時使用)
+    """
+    import matplotlib.pyplot as plt
+
+    plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei', 'SimHei', 'Arial']
+    plt.rcParams['axes.unicode_minus'] = False
+
+    means = df[cols].mean()
+    if demean:
+        # 減去這組變數 mean 的平均值 (scalar)
+        avg_of_means = means.mean()
+        means = means - avg_of_means
+
+    if ax is None:
+        fig, current_ax = plt.subplots(figsize=figsize)
+        show_plot = True
+    else:
+        current_ax = ax
+        show_plot = False
+
+    colors = ['#3498db'] # 預設藍色
+    if demean:
+        colors = ['#2ecc71' if v >= 0 else '#e74c3c' for v in means.values]
+    
+    current_ax.bar(range(len(means)), means.values, color=colors)
+    
+    if demean:
+        current_ax.axhline(y=0, color='black', linestyle='--', linewidth=0.8)
+        current_ax.set_ylabel('Deviation from Group Average Mean')
+    else:
+        current_ax.set_ylabel('Mean')
+    current_ax.set_title(title)
+    
+    current_ax.set_xticks(range(len(means)))
+    current_ax.set_xticklabels(means.index, rotation=45, ha='right')
+
+    if show_plot:
+        fig.tight_layout()
+        if save_path:
+            fig.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.show()
+        return fig
+    else:
+        return current_ax
+
+def plot_group_bar(
+    table: pd.DataFrame,
+    group_names: list[str] | None = None,
+    title: str = '',
+    figsize: tuple[int, int] = (14, 6),
+    save_path: str | None = None,
+):
+    """從差異檢定表畫分組長條圖（只取 mean 欄）
+
+    Parameters
+    ----------
+    table : difference_test_table 回傳的 MultiIndex DataFrame
+    group_names : 要畫的組別名稱（第一層 column），若不指定則取所有非差異欄
+    title : 圖表標題
+    figsize : 圖表大小
+    save_path : 存檔路徑（.png），None 則不存檔
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei', 'SimHei', 'Arial']
+    plt.rcParams['axes.unicode_minus'] = False
+
+    # 取第一層 column 中不含 '-' 的組別（排除差異欄）
+    if group_names is None:
+        group_names = [name for name in table.columns.get_level_values(0).unique()
+                       if '-' not in name]
+
+    # 取 mean 欄位
+    plot_data = table.loc[:, [(g, 'mean') for g in group_names]]
+    plot_data.columns = group_names
+    plot_data = plot_data.apply(pd.to_numeric, errors='coerce')
+
+    # 畫圖
+    x = np.arange(len(plot_data.index))
+    width = 0.8 / len(group_names)
+
+    fig, ax = plt.subplots(figsize=figsize)
+    for i, g in enumerate(group_names):
+        ax.bar(x + i * width, plot_data[g], width, label=g)
+
+    ax.set_xticks(x + width * (len(group_names) - 1) / 2)
+    ax.set_xticklabels(plot_data.index, rotation=45, ha='right')
+    ax.legend()
+    ax.set_title(title)
+    fig.tight_layout()
+
+    if save_path:
+        fig.savefig(save_path, dpi=150, bbox_inches='tight')
+
+    plt.show()
+    return fig

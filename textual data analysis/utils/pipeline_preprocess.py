@@ -32,16 +32,16 @@ def _process_unified_case(args):
     )
     from utils.role_extractor import extract_role_features
 
-    file_path = os.path.join(input_folder, f"{jid}.json")
+    file_path = os.path.join(input_folder, f'{jid}.json')
     try:
         if os.path.getsize(file_path) == 0: return None
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     except: return None
 
-    jtitle = data.get("JTITLE", "")
-    jcase = data.get("JCASE", "")
-    jfull = data.get("JFULL", "")
+    jtitle = data.get('JTITLE', '')
+    jcase = data.get('JCASE', '')
+    jfull = data.get('JFULL', '')
 
     # 核心特徵提取 (僅保留判定勝負所需的欄位)
     ip_law = ip_law_check(JTITLE_PATTERNS, jtitle, jcase)
@@ -50,29 +50,29 @@ def _process_unified_case(args):
     role_f = extract_role_features(jfull, j_type)
 
     return {
-        "JID": jid,
-        "JYEAR": data.get("JYEAR", ""),
-        "JCASE": jcase,
-        "JDATE": data.get("JDATE", ""),
-        "JTITLE": jtitle,
-        "IP Law": ip_law,
-        "JTYPE": j_type,
-        "main_clause": main_clause,
-        "JFULL": jfull,
+        'JID': jid,
+        'JYEAR': data.get('JYEAR', ''),
+        'JCASE': jcase,
+        'JDATE': data.get('JDATE', ''),
+        'JTITLE': jtitle,
+        'IP Law': ip_law,
+        'JTYPE': j_type,
+        'main_clause': main_clause,
+        'JFULL': jfull,
         **role_f
     }
 
 # 定位專案根目錄 (textual data analysis/)
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 def run_preprocessing(input_folder=None, output_folder=None,
                       artifacts_folder=None, cache_folder=None, n_jobs=-1,
                       parquet_folder=None):
     # ─── 自動對齊絕對路徑 (解決路徑亂竄問題) ───
-    if input_folder is None: input_folder = os.path.join(PROJECT_ROOT, "data/raw_json")
-    if output_folder is None: output_folder = os.path.join(PROJECT_ROOT, "data/IP_Law_processed")
-    if artifacts_folder is None: artifacts_folder = os.path.join(PROJECT_ROOT, "artifacts/reports")
-    if cache_folder is None: cache_folder = os.path.join(PROJECT_ROOT, "artifacts/cache")
+    if input_folder is None: input_folder = os.path.join(PROJECT_ROOT, 'data/raw_json')
+    if output_folder is None: output_folder = os.path.join(PROJECT_ROOT, 'data/processed/IP_Law_cases')
+    if artifacts_folder is None: artifacts_folder = os.path.join(PROJECT_ROOT, 'artifacts/reports')
+    if cache_folder is None: cache_folder = os.path.join(PROJECT_ROOT, 'artifacts/cache')
 
     input_folder = os.path.abspath(input_folder)
     artifacts_folder = os.path.abspath(artifacts_folder)
@@ -97,8 +97,8 @@ def run_preprocessing(input_folder=None, output_folder=None,
     os.makedirs(artifacts_folder, exist_ok=True)
     os.makedirs(cache_folder, exist_ok=True)
 
-    cache_path = os.path.join(cache_folder, "raw_extracted.parquet")
-    full_backup_cache = os.path.join(cache_folder, "full_text_backup.parquet")
+    cache_path = os.path.join(cache_folder, 'raw_extracted.parquet')
+    full_backup_cache = os.path.join(cache_folder, 'full_text_backup.parquet')
     df = None
 
     # ─── 嘗試載入 Parquet 緩存（parquet_folder 未指定時才走 cache）───────
@@ -114,50 +114,50 @@ def run_preprocessing(input_folder=None, output_folder=None,
     # ─── 若指定 parquet_folder，從使用者 Parquet 讀取並重新計算 JTYPE ─
     if df is None and parquet_folder is not None:
         parquet_folder = os.path.abspath(parquet_folder)
-        raw_ext_path = os.path.join(parquet_folder, "raw_extracted.parquet")
-        full_text_path = os.path.join(parquet_folder, "full_text_backup.parquet")
+        raw_ext_path = os.path.join(parquet_folder, 'raw_extracted.parquet')
+        full_text_path = os.path.join(parquet_folder, 'full_text_backup.parquet')
         print(f"📂 從使用者 Parquet 讀取資料 ({parquet_folder})...")
         df = pd.read_parquet(raw_ext_path)
         df_full = pd.read_parquet(full_text_path)
         # 合併 JFULL（重新計算 JTYPE 需要）
-        df = df.merge(df_full[["JID", "JFULL"]], on="JID", how="left")
+        df = df.merge(df_full[['JID', 'JFULL']], on='JID', how='left')
         print(f"✅ 載入成功！共 {len(df)} 筆資料。")
 
         # 重新計算 JTYPE（修正 RULING 誤判問題）
         print("🔄 重新計算 JTYPE（修正 RULING 位置判斷）...")
         from utils.verdict_utils import j_type_check, ip_law_check
         def _recompute_jtype(row):
-            jfull_val = row["JFULL"] if isinstance(row.get("JFULL"), str) else ""
-            return j_type_check(JTYPE_PATTERNS, row["JCASE"], jfull_val, row["IP Law"], row["JID"])
-        df["JTYPE"] = df.apply(_recompute_jtype, axis=1)
+            jfull_val = row['JFULL'] if isinstance(row.get('JFULL'), str) else ''
+            return j_type_check(JTYPE_PATTERNS, row['JCASE'], jfull_val, row['IP Law'], row['JID'])
+        df['JTYPE'] = df.apply(_recompute_jtype, axis=1)
         print("✅ JTYPE 重新計算完成。")
 
         # 重新計算 main_clause（確保與新 JTYPE 一致）
         from utils.verdict_utils import extract_main_clause
         print("🔄 重新萃取 main_clause...")
-        df["main_clause"] = df.apply(
-            lambda row: extract_main_clause(MAIN_PATTERNS, row["JFULL"])
-            if isinstance(row.get("JFULL"), str) else None, axis=1
+        df['main_clause'] = df.apply(
+            lambda row: extract_main_clause(MAIN_PATTERNS, row['JFULL'])
+            if isinstance(row.get('JFULL'), str) else None, axis=1
         )
 
         # 儲存全文本備份到 cache
         print(f"📦 正在快速存儲「全文本備份」資料 -> {full_backup_cache}")
-        df[["JID", "JFULL"]].to_parquet(full_backup_cache, index=False, compression="snappy")
+        df[['JID', 'JFULL']].to_parquet(full_backup_cache, index=False, compression='snappy')
 
         # 儲存輕量化核心特徵快取（不含 JFULL）
         # 用 inplace drop 避免建立副本導致 OOM（JFULL 已存入 full_text_backup，可安全釋放）
         import gc
-        df.drop(columns=["JFULL"], inplace=True)
+        df.drop(columns=['JFULL'], inplace=True)
         gc.collect()
         df_no_jfull = df
         print(f"⚡️ 正在存儲「輕量化核心特徵」快取 -> {cache_path}")
-        df_no_jfull.to_parquet(cache_path, index=False, compression="snappy")
+        df_no_jfull.to_parquet(cache_path, index=False, compression='snappy')
 
     # ─── 若無緩存且無 parquet_folder，執行 Cold Start (一次讀取 9 萬筆) ─
     if df is None:
         print(f"🚀 緩存不存在，啟動 Cold Start (讀取自 {input_folder})...")
-        files = [f.replace(".json", "") for f in os.listdir(input_folder) if f.endswith(".json")]
-        SPECIAL_CASES = ["CHDM,101,智附民, 2,20131223,1", "CHDM,102,智簡上, 1,20130510,1"]
+        files = [f.replace('.json', '') for f in os.listdir(input_folder) if f.endswith('.json')]
+        SPECIAL_CASES = ['CHDM,101,智附民, 2,20131223,1', 'CHDM,102,智簡上, 1,20130510,1']
         items = [(jid, input_folder, SPECIAL_CASES) for jid in files]
         max_workers = max(1, multiprocessing.cpu_count() - 1) if n_jobs == -1 else n_jobs
         results = []
@@ -170,17 +170,17 @@ def run_preprocessing(input_folder=None, output_folder=None,
 
         # 儲存全文本備份
         print(f"📦 正在快速存儲「全文本備份」資料 -> {full_backup_cache}")
-        df[["JID", "JFULL"]].to_parquet(full_backup_cache, index=False, compression="snappy")
+        df[['JID', 'JFULL']].to_parquet(full_backup_cache, index=False, compression='snappy')
 
         # 儲存輕量化核心特徵快取（不含 JFULL）
-        df = df.drop(columns=["JFULL"])
+        df = df.drop(columns=['JFULL'])
         print(f"⚡️ 正在存儲「輕量化核心特徵」快取 -> {cache_path}")
-        df.to_parquet(cache_path, index=False, compression="snappy")
+        df.to_parquet(cache_path, index=False, compression='snappy')
 
     # ─── CJK 空白字元修正（修正從 cache 載入的 main_clause OCR 問題）──────
     import re as _re
-    df["main_clause"] = df["main_clause"].apply(
-        lambda mc: _re.sub(r"(?<=[^\x00-\x7F])[ \t]+(?=[^\x00-\x7F])", "", mc)
+    df['main_clause'] = df['main_clause'].apply(
+        lambda mc: _re.sub(r'(?<=[^\x00-\x7F])[ \t]+(?=[^\x00-\x7F])', '', mc)
         if isinstance(mc, str) else mc
     )
 
@@ -193,57 +193,57 @@ def run_preprocessing(input_folder=None, output_folder=None,
     for jid, m in MANUAL_LABELING.items():
         if not jid:
             continue
-        if jid not in df["JID"].values:
+        if jid not in df['JID'].values:
             continue
-        idx = df[df["JID"] == jid].index[0]
-        df.at[idx, "JTYPE"] = m.get("j_type", df.at[idx, "JTYPE"])
-        if "j_result" in m:
-            jfull_val = df.at[idx, "JFULL"] if "JFULL" in df.columns else ""
+        idx = df[df['JID'] == jid].index[0]
+        df.at[idx, 'JTYPE'] = m.get('j_type', df.at[idx, 'JTYPE'])
+        if 'j_result' in m:
+            jfull_val = df.at[idx, 'JFULL'] if 'JFULL' in df.columns else ''
             if not isinstance(jfull_val, str):
-                jfull_val = ""
-            df.at[idx, "VERDICT"] = map_manual_verdict(m["j_result"], jfull_val)
+                jfull_val = ''
+            df.at[idx, 'VERDICT'] = map_manual_verdict(m['j_result'], jfull_val)
 
     # ─── valid_mask 僅用於 fact_removed_blank 萃取 ─────────
-    valid_jtypes = ("ADMINISTRATIVE", "CIVIL", "CRIMINAL", "CWC")
+    valid_jtypes = ('ADMINISTRATIVE', 'CIVIL', 'CRIMINAL', 'CWC')
     valid_mask = (
-        (df["IP Law"] == True)
-        & df["JTYPE"].isin(valid_jtypes)
-        & ~df["VERDICT"].isin(["未知", "不重要"])
+        (df['IP Law'] == True)
+        & df['JTYPE'].isin(valid_jtypes)
+        & ~df['VERDICT'].isin(['未知', '不重要'])
     )
     # judgment_labels 輸出全部 9 萬筆（不過濾 IP Law）
     # 移除恆為空值/False 的無效欄位（零資訊量）
     _ZERO_INFO_COLS = [
-        "victim_names", "victim_is_company", "victim_is_government",
-        "company_as_victim_only", "prosecutor_is_company",
-        "civil_plaintiff_is_government", "受刑人_is_government",
+        'victim_names', 'victim_is_company', 'victim_is_government',
+        'company_as_victim_only', 'prosecutor_is_company',
+        'civil_plaintiff_is_government', '受刑人_is_government',
     ]
     df_labels_out = df.drop(
-        columns=["main_clause", "Fact", "JFULL"] + _ZERO_INFO_COLS,
-        errors="ignore"
+        columns=['main_clause', 'Fact', 'JFULL'] + _ZERO_INFO_COLS,
+        errors='ignore'
     )
 
     # ─── 儲存 judgment_labels ──────────────────────────────
-    labels_csv = os.path.join(artifacts_folder, "judgment_labels.csv")
-    df_labels_out.to_csv(labels_csv, index=False, encoding="utf-8-sig")
+    labels_csv = os.path.join(artifacts_folder, 'judgment_labels.csv')
+    df_labels_out.to_csv(labels_csv, index=False, encoding='utf-8-sig')
 
     print("📊 正在產出 Excel 報表...")
     excel_tasks = [
-        ("Labels", df_labels_out, "judgment_labels.xlsx"),
+        ('Labels', df_labels_out, 'judgment_labels.xlsx'),
     ]
     try:
         import shutil
         # 自動選擇可用的 Excel engine（xlsxwriter 優先，fallback 到 openpyxl）
         try:
             import xlsxwriter
-            engine = "xlsxwriter"
-            engine_kwargs = {"options": {"strings_to_urls": False}}
+            engine = 'xlsxwriter'
+            engine_kwargs = {'options': {'strings_to_urls': False}}
         except ImportError:
-            engine = "openpyxl"
+            engine = 'openpyxl'
             engine_kwargs = {}
         print(f"  (使用 Excel engine: {engine})")
         for name, data, filename in excel_tasks:
             target = os.path.join(artifacts_folder, filename)
-            tmp = os.path.join(os.path.dirname(target), f"~tmp_{filename}")
+            tmp = os.path.join(os.path.dirname(target), f'~tmp_{filename}')
             print(f"  - 正在產出 {filename}...")
             with pd.ExcelWriter(tmp, engine=engine, engine_kwargs=engine_kwargs) as writer:
                 data.to_excel(writer, index=False)
@@ -254,26 +254,26 @@ def run_preprocessing(input_folder=None, output_folder=None,
 
     # ─── 產出 fact_removed_blank.xlsx（供 build_features Step 2 使用）─
     # 若 JFULL 不在 df，從 full_text_backup.parquet 補充載入
-    if "JFULL" not in df.columns and os.path.exists(full_backup_cache):
+    if 'JFULL' not in df.columns and os.path.exists(full_backup_cache):
         print("📖 載入 JFULL 進行事實萃取...")
         df_jfull = pd.read_parquet(full_backup_cache)
-        df = df.merge(df_jfull[["JID", "JFULL"]], on="JID", how="left")
+        df = df.merge(df_jfull[['JID', 'JFULL']], on='JID', how='left')
 
-    fact_removed_blank_path = os.path.join(artifacts_folder, "fact_removed_blank.xlsx")
-    if "JFULL" in df.columns:
-        SPECIAL_CASES = ["CHDM,101,智附民, 2,20131223,1", "CHDM,102,智簡上, 1,20130510,1"]
+    fact_removed_blank_path = os.path.join(artifacts_folder, 'fact_removed_blank.xlsx')
+    if 'JFULL' in df.columns:
+        SPECIAL_CASES = ['CHDM,101,智附民, 2,20131223,1', 'CHDM,102,智簡上, 1,20130510,1']
         print("✂️ 正在萃取犯罪事實 / 事實及理由文字...")
         fact_records = []
         for _, row in tqdm(df[valid_mask].iterrows(),
                            total=int(valid_mask.sum()), desc="Extracting Facts"):
-            jid = row["JID"]
-            jfull = row.get("JFULL", "")
+            jid = row['JID']
+            jfull = row.get('JFULL', '')
             if not isinstance(jfull, str):
-                jfull = ""
+                jfull = ''
             fact = extract_fact(jid, jfull, SPECIAL_CASES)
-            if fact and fact not in ("No next line found", "No end match found"):
-                fact_records.append({"JID": jid, "Text": fact})
-        df_fact = pd.DataFrame(fact_records).set_index("JID")
+            if fact and fact not in ('No next line found', 'No end match found'):
+                fact_records.append({'JID': jid, 'Text': fact})
+        df_fact = pd.DataFrame(fact_records).set_index('JID')
         df_fact = remove_blank(df_fact)
         df_fact.to_excel(fact_removed_blank_path)
         print(f"✅ fact_removed_blank.xlsx 儲存完成，共 {len(df_fact)} 筆。")
@@ -281,9 +281,9 @@ def run_preprocessing(input_folder=None, output_folder=None,
         print("⚠️ 找不到 JFULL，無法產出 fact_removed_blank.xlsx。"
               "請確認 full_text_backup.parquet 存在於 cache_folder。")
 
-    df = df.drop(columns=["JFULL"], errors="ignore")
+    df = df.drop(columns=['JFULL'], errors='ignore')
     return df
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     run_preprocessing()

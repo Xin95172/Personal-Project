@@ -1,4 +1,4 @@
-﻿import numpy as np
+import numpy as np
 import torch
 import torch.nn as nn
 from pathlib import Path
@@ -9,7 +9,7 @@ from algos.metrics import evaluate_metrics
 from sklearn.preprocessing import LabelEncoder
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MODEL_PATH = PROJECT_ROOT / "artifacts" / "models" / "best_model.pt"
+DEFAULT_MODEL_PATH = PROJECT_ROOT / 'artifacts' / 'models' / 'best_model.pt'
 
 
 class NNClassifierModel(nn.Module):
@@ -80,7 +80,7 @@ def train_model(
     batch_size: int = 128,
     lr: float = 1e-3,
     weight_decay: float = 1e-4,
-    device: str = "cpu",
+    device: str = 'cpu',
     save_path: str | None = None,
     labels: list | None = None
 ):
@@ -164,7 +164,7 @@ def train_model(
                 all_labels.append(yb)
         y_pred = torch.cat(all_preds)
         y_true = torch.cat(all_labels)
-        f1_macro = f1_score(y_true, y_pred, average="macro")
+        f1_macro = f1_score(y_true, y_pred, average='macro')
 
         # 轉回原始標籤（若使用了 LabelEncoder）
         if 'le' in locals():
@@ -175,10 +175,10 @@ def train_model(
             y_true_labels = y_true.numpy()
 
         metrics_per_epoch.append({
-            "epoch": epoch + 1,
-            "loss": avg_loss,
-            "accuracy": acc,
-            "f1_macro": f1_macro
+            'epoch': epoch + 1,
+            'loss': avg_loss,
+            'accuracy': acc,
+            'f1_macro': f1_macro
         })
 
         print(f"[Epoch {epoch + 1}] Loss: {avg_loss:.4f} | Acc: {acc:.4f} | F1_macro: {f1_macro:.4f}")
@@ -189,5 +189,5 @@ def train_model(
             best_f1 = f1_macro
             torch.save(model.state_dict(), save_path)
 
-    best_epoch = max(metrics_per_epoch, key = lambda x: x["f1_macro"])
+    best_epoch = max(metrics_per_epoch, key = lambda x: x['f1_macro'])
     print(f"\n最佳模型在 Epoch {best_epoch['epoch']}，F1_macro = {best_epoch['f1_macro']:.4f}")

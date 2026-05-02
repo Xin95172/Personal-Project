@@ -1,14 +1,14 @@
-﻿from typing import Literal
+from typing import Literal
 
 import numpy as np
 import scipy.sparse as sp
 from sklearn.ensemble import RandomForestClassifier
 
 
-DTType = Literal["gini", "entropy"]
+DTType = Literal['gini', 'entropy']
 
 
-def _ensure_1d_labels(y: np.ndarray, name: str = "y_train") -> np.ndarray:
+def _ensure_1d_labels(y: np.ndarray, name: str = 'y_train') -> np.ndarray:
     y_arr = np.asarray(y)
     if y_arr.ndim == 2 and y_arr.shape[1] == 1:
         y_arr = y_arr.ravel()
@@ -21,10 +21,10 @@ class RFClassifier:
     def __init__(
         self,
         n_estimators: int = 100,
-        criterion: DTType = "entropy",
+        criterion: DTType = 'entropy',
         max_depth: int | None = None,
         min_samples_leaf: int = 1,
-        max_features: float | Literal["sqrt", "log2"] = "sqrt",
+        max_features: float | Literal['sqrt', 'log2'] = 'sqrt',
         n_jobs: int = -1,
         random_state: int = 42,
     ):

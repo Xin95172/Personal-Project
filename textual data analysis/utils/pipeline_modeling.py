@@ -22,9 +22,9 @@ def _load_mnir_functions():
     return load_or_fit_feature_splits, summarize_predictions
 
 def evaluate_all_models(
-    dtm_bow_path="../lexicon_resources/dtm_csr_BoW.npz",
-    dtm_tfidf_path="../lexicon_resources/dtm_csr_TF_IDF.npz",
-    verdict_results_path="../artifacts/reports/verdict_results.xlsx"
+    dtm_bow_path='../artifacts/features/dtm/dtm_csr_BoW.npz',
+    dtm_tfidf_path='../artifacts/features/dtm/dtm_csr_TF_IDF.npz',
+    verdict_results_path='../artifacts/reports/verdict_results.xlsx'
 ):
     """
     執行所有的模型訓練與驗證 (儀表板專用版)，
@@ -62,15 +62,15 @@ def evaluate_all_models(
         y_train=y_train_bow,
         X_val=x_val_bow,
         X_test=x_test_bow,
-        train_name="mnir_z_train_bow.npy",
-        val_name="mnir_z_val_bow.npy",
-        test_name="mnir_z_test_bow.npy",
-        model_name="mnir_mnlm_bow.rds",
+        train_name='mnir_z_train_bow.npy',
+        val_name='mnir_z_val_bow.npy',
+        test_name='mnir_z_test_bow.npy',
+        model_name='mnir_mnlm_bow.rds',
     )
     
-    z_train_bow = feature_res["z_train"]
-    z_val_bow = feature_res["z_val"]
-    z_test_bow = feature_res["z_test"]
+    z_train_bow = feature_res['z_train']
+    z_val_bow = feature_res['z_val']
+    z_test_bow = feature_res['z_test']
     
     print("4. 訓練並驗證機器學習模型 (在此示範 SVM)...")
     
@@ -88,9 +88,9 @@ def evaluate_all_models(
         y_pred = clf.predict(z_val_bow)
         
         acc = accuracy_score(y_val_bow, y_pred)
-        macro_f1 = f1_score(y_val_bow, y_pred, average="macro")
+        macro_f1 = f1_score(y_val_bow, y_pred, average='macro')
         
-        results_list.append({"Model": f"SVM (C={c})", "Accuracy": acc, "Macro F1": macro_f1})
+        results_list.append({'Model': f'SVM (C={c})', 'Accuracy': acc, 'Macro F1': macro_f1})
         
         if macro_f1 > best_score:
             best_score = macro_f1
@@ -104,13 +104,13 @@ def evaluate_all_models(
     y_test_pred = final_clf.predict(z_test_bow)
     
     test_acc = accuracy_score(y_test_bow, y_test_pred)
-    test_macro_f1 = f1_score(y_test_bow, y_test_pred, average="macro")
+    test_macro_f1 = f1_score(y_test_bow, y_test_pred, average='macro')
     
     metrics_df = pd.DataFrame(results_list)
     print(f"✅ 建模管線完成！最終測試集準確率: {test_acc:.4f}")
     
     return metrics_df
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     df_metrics = evaluate_all_models()
     print(df_metrics)

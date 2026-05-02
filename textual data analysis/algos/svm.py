@@ -1,9 +1,9 @@
-﻿import numpy as np
+import numpy as np
 import scipy.sparse as sp
 from sklearn.svm import LinearSVC
 
 
-def _ensure_1d_labels(y: np.ndarray, name: str = "y_train") -> np.ndarray:
+def _ensure_1d_labels(y: np.ndarray, name: str = 'y_train') -> np.ndarray:
     y_arr = np.asarray(y)
     if y_arr.ndim == 2 and y_arr.shape[1] == 1:
         y_arr = y_arr.ravel()

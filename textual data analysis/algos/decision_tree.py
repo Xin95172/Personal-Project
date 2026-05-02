@@ -1,14 +1,14 @@
-﻿from typing import Literal
+from typing import Literal
 
 import numpy as np
 import scipy.sparse as sp
 from sklearn.tree import DecisionTreeClassifier
 
 
-DTType = Literal["gini", "entropy"]
+DTType = Literal['gini', 'entropy']
 
 
-def _ensure_1d_labels(y: np.ndarray, name: str = "y_train") -> np.ndarray:
+def _ensure_1d_labels(y: np.ndarray, name: str = 'y_train') -> np.ndarray:
     y_arr = np.asarray(y)
     if y_arr.ndim == 2 and y_arr.shape[1] == 1:
         y_arr = y_arr.ravel()
@@ -20,7 +20,7 @@ def _ensure_1d_labels(y: np.ndarray, name: str = "y_train") -> np.ndarray:
 def fit_decision_tree_classifier(
     x_train: np.ndarray | sp.spmatrix,
     y_train: np.ndarray,
-    criterion: DTType = "entropy",
+    criterion: DTType = 'entropy',
     max_depth: int | None = None,
     min_samples_leaf: int = 1,
     random_state: int = 42,

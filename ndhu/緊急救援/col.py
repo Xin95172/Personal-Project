@@ -181,3 +181,26 @@ control_vars = [
 
 # 固定效果
 fe_vars = ['Firm_id', 'Year']
+
+# 共變數矩陣
+corr_vars = [
+    'Conglo', 'Seg', 'Comp', 'Foreign_Dummy', 'Foreign_Sales_Ratio', 
+    'TESG_score_t', 'TESG_score_lead1', 'TESG_score_lead2', 'TESG_score_lead3', 
+    'TESG_grade_t', 'TESG_grade_lead1', 'TESG_grade_lead2', 'TESG_grade_lead3', 
+    'E_score_t', 'E_score_lead1', 'E_score_lead2', 'E_score_lead3', 
+    'S_score_t', 'S_score_lead1', 'S_score_lead2', 'S_score_lead3', 
+    'G_score_t', 'G_score_lead1', 'G_score_lead2', 'G_score_lead3', 
+    'GHG_score_t', 'GHG_score_lead1', 'GHG_score_lead2', 'GHG_score_lead3', 
+    'Energy_score_t', 'Energy_score_lead1', 'Energy_score_lead2', 'Energy_score_lead3', 
+    'Water_score_t', 'Water_score_lead1', 'Water_score_lead2', 'Water_score_lead3', 
+    'Waste_score_t', 'Waste_score_lead1', 'Waste_score_lead2', 'Waste_score_lead3', 
+    'Human_rights_score_t', 'Human_rights_score_lead1', 'Human_rights_score_lead2', 'Human_rights_score_lead3', 
+    'Data_security_score_t', 'Data_security_score_lead1', 'Data_security_score_lead2', 'Data_security_score_lead3', 
+    'Product_quality_score_t', 'Product_quality_score_lead1', 'Product_quality_score_lead2', 'Product_quality_score_lead3', 
+    'Employee_metrics_score_t', 'Employee_metrics_score_lead1', 'Employee_metrics_score_lead2', 'Employee_metrics_score_lead3', 
+    'Employee_health_score_t', 'Employee_health_score_lead1', 'Employee_health_score_lead2', 'Employee_health_score_lead3', 
+    'Ownership_control_score_t', 'Ownership_control_score_lead1', 'Ownership_control_score_lead2', 'Ownership_control_score_lead3', 
+    'Stakeholder_fairness_score_t', 'Stakeholder_fairness_score_lead1', 'Stakeholder_fairness_score_lead2', 'Stakeholder_fairness_score_lead3', 
+    'Governance_transparency_score_t', 'Governance_transparency_score_lead1', 'Governance_transparency_score_lead2', 'Governance_transparency_score_lead3', 
+    'l_Size', 'Lev', 'Cash_r', 'ROA', 'Current_Ratio', 'Tangibility_r', 'Board_Independ_r', 'Age', 'l_Age', 'SalesGrowth'
+]

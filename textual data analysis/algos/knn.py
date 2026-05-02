@@ -1,13 +1,13 @@
-﻿from typing import Literal
+from typing import Literal
 
 import numpy as np
 import scipy.sparse as sp
 from sklearn.neighbors import KNeighborsClassifier
 
 
-WEIGHTS = Literal["uniform", "distance"]
-ALGORITHMS = Literal["auto", "ball_tree", "kd_tree", "brute"]
-METRICS = Literal["minkowski", "euclidean", "manhattan", "cosine"]
+WEIGHTS = Literal['uniform', 'distance']
+ALGORITHMS = Literal['auto', 'ball_tree', 'kd_tree', 'brute']
+METRICS = Literal['minkowski', 'euclidean', 'manhattan', 'cosine']
 
 
 class KNNClassifier:
@@ -16,9 +16,9 @@ class KNNClassifier:
     def __init__(
         self,
         n_neighbors: int = 5,
-        weights: WEIGHTS = "uniform",
-        algorithm: ALGORITHMS = "auto",
-        metric: METRICS = "minkowski",
+        weights: WEIGHTS = 'uniform',
+        algorithm: ALGORITHMS = 'auto',
+        metric: METRICS = 'minkowski',
         p: int = 2,
         n_jobs: int = -1,
     ):
@@ -30,9 +30,9 @@ class KNNClassifier:
         self.n_jobs = n_jobs
         self.is_fitted = False
 
-        if self.metric == "cosine" and self.algorithm != "brute":
+        if self.metric == 'cosine' and self.algorithm != 'brute':
             print("metric='cosine' requires algorithm='brute'; switching automatically.")
-            self.algorithm = "brute"
+            self.algorithm = 'brute'
 
         self.model = KNeighborsClassifier(
             n_neighbors=self.n_neighbors,
