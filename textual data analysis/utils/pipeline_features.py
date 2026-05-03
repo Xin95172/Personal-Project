@@ -20,7 +20,8 @@ def build_features(df_clean_path='../artifacts/reports/fact_removed_blank.xlsx',
                    lexicon_folder='../resources/lexicons',
                    dictionary_folder='../resources/dictionaries',
                    features_folder='../artifacts/features/dtm',
-                   force_recompute_seg=False):
+                   force_recompute_seg=False,
+                   ckip_device=-1):
     """
     執行斷詞與特徵矩陣工程管線，包含：
     1. CKIP 斷詞並過濾停用詞
@@ -39,7 +40,7 @@ def build_features(df_clean_path='../artifacts/reports/fact_removed_blank.xlsx',
         df_word_seg.set_index('JID', inplace=True)
     else:
         print("初始化 CkipWordSegmenter...")
-        ws_driver = CkipWordSegmenter(model='albert-base', device=-1)
+        ws_driver = CkipWordSegmenter(model='albert-base', device=ckip_device)
 
         print("讀取乾淨的判決事實...")
         df_removed_blank = pd.read_excel(df_clean_path)
@@ -48,7 +49,7 @@ def build_features(df_clean_path='../artifacts/reports/fact_removed_blank.xlsx',
         df_word_seg = df_removed_blank.copy()
         print("開始執行 CKIP 斷詞迴圈...")
         for jid, fact in tqdm(df_removed_blank.iterrows(), total=len(df_removed_blank)):
-            ws_result = word_seg(fact['Text'], ws_driver, vocab_list)
+            ws_result = word_seg(fact['Text'], ws_driver, vocab_list, show_progress=False)
             df_word_seg.at[jid, 'Word Segmentation'] = str(ws_result)
         df_word_seg.to_excel(word_seg_path)
         print(f"斷詞完成，結果已儲存為 {word_seg_path}")
