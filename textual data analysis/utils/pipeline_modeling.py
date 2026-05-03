@@ -1,4 +1,5 @@
 import os
+import re
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
@@ -22,9 +23,13 @@ def _load_mnir_functions():
     return load_or_fit_feature_splits, summarize_predictions
 
 def evaluate_all_models(
-    dtm_bow_path='../artifacts/features/dtm/dtm_csr_BoW.npz',
-    dtm_tfidf_path='../artifacts/features/dtm/dtm_csr_TF_IDF.npz',
-    verdict_results_path='../artifacts/reports/verdict_results.xlsx'
+    dtm_bow_path=None,
+    dtm_tfidf_path=None,
+    verdict_results_path=None,
+    dataset_name=None,
+    remove_leakage=False,
+    features_folder='../artifacts/features/dtm',
+    artifacts_folder='../artifacts/reports',
 ):
     """
     執行所有的模型訓練與驗證 (儀表板專用版)，
@@ -34,6 +39,34 @@ def evaluate_all_models(
         metrics_df: 包含各個模型表現的 dataframe
     """
     print("1. 載入特徵矩陣 (Features) 與判決標籤 (Labels)...")
+    def _safe_slug(value):
+        value = re.sub(r'[^A-Za-z0-9_.-]+', '_', str(value).strip().lower())
+        return value.strip('_') or 'subset'
+
+    leakage_variant = 'no_leakage' if remove_leakage else 'with_leakage'
+    if dataset_name:
+        dataset_slug = _safe_slug(dataset_name)
+        dtm_folder = os.path.join(features_folder, dataset_slug, leakage_variant)
+        dtm_bow_path = dtm_bow_path or os.path.join(dtm_folder, 'dtm_csr_BoW.npz')
+        dtm_tfidf_path = dtm_tfidf_path or os.path.join(dtm_folder, 'dtm_csr_TF_IDF.npz')
+        verdict_results_path = verdict_results_path or os.path.join(
+            artifacts_folder, dataset_slug, leakage_variant, 'verdict_results.xlsx'
+        )
+    else:
+        if remove_leakage:
+            dtm_folder = os.path.join(features_folder, leakage_variant)
+            dtm_bow_path = dtm_bow_path or os.path.join(dtm_folder, 'dtm_csr_BoW.npz')
+            dtm_tfidf_path = dtm_tfidf_path or os.path.join(dtm_folder, 'dtm_csr_TF_IDF.npz')
+            verdict_results_path = verdict_results_path or os.path.join(
+                artifacts_folder, leakage_variant, 'verdict_results.xlsx'
+            )
+        else:
+            dtm_bow_path = dtm_bow_path or os.path.join(features_folder, 'dtm_csr_BoW.npz')
+            dtm_tfidf_path = dtm_tfidf_path or os.path.join(features_folder, 'dtm_csr_TF_IDF.npz')
+            verdict_results_path = verdict_results_path or os.path.join(
+                artifacts_folder, 'verdict_results.xlsx'
+            )
+
     if not os.path.exists(dtm_bow_path):
         print(f"找不到檔案 {dtm_bow_path}，請確認是否已經生成 DTM。")
         return pd.DataFrame()
