@@ -23,12 +23,14 @@ def build_features(df_clean_path='../artifacts/reports/fact_removed_blank.xlsx',
                    dictionary_folder='../resources/dictionaries',
                    features_folder='../artifacts/features/dtm',
                    force_recompute_seg=False,
-                   ckip_device=0,
+                   ckip_device='auto',
                    target_jtypes=None,
                    target_verdicts=None,
                    dataset_name=None,
                    remove_leakage=False,
-                   leakage_terms_path=None):
+                   leakage_terms_path=None,
+                   verbose=False,
+                   show_progress=True):
     """
     執行斷詞與特徵矩陣工程管線，包含：
     1. CKIP 斷詞並過濾停用詞
@@ -46,8 +48,36 @@ def build_features(df_clean_path='../artifacts/reports/fact_removed_blank.xlsx',
         value = re.sub(r'[^A-Za-z0-9_.-]+', '_', value.strip().lower())
         return value.strip('_') or 'subset'
 
+    def _log(*args, **kwargs):
+        if verbose:
+            print(*args, **kwargs)
+
+    def _resolve_ckip_device(device):
+        if device == 'auto':
+            try:
+                import torch
+                return 0 if torch.cuda.is_available() else -1
+            except ImportError:
+                return -1
+
+        if isinstance(device, int) and device >= 0:
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    return device
+            except ImportError:
+                pass
+            _log(
+                f"ckip_device={device} was requested, but this PyTorch build "
+                "does not have CUDA available. Falling back to CPU."
+            )
+            return -1
+
+        return device
+
     target_jtypes = _as_list(target_jtypes)
     target_verdicts = _as_list(target_verdicts)
+    ckip_device = _resolve_ckip_device(ckip_device)
 
     if dataset_name is None and (target_jtypes or target_verdicts):
         parts = []
@@ -70,7 +100,7 @@ def build_features(df_clean_path='../artifacts/reports/fact_removed_blank.xlsx',
         dataset_artifacts_folder = artifacts_folder
     os.makedirs(dataset_artifacts_folder, exist_ok=True)
 
-    print("1. 載入判決事實與標籤，建立 Step 2 資料集...")
+    _log("1. 載入判決事實與標籤，建立 Step 2 資料集...")
     df_removed_blank = pd.read_excel(df_clean_path)
     labels_path = os.path.join(artifacts_folder, 'judgment_labels.xlsx')
     labels_all = pd.read_excel(labels_path)
@@ -91,13 +121,13 @@ def build_features(df_clean_path='../artifacts/reports/fact_removed_blank.xlsx',
             f"target_verdicts={target_verdicts}"
         )
 
-    print(f"資料集名稱: {dataset_name or 'all'}")
-    print(f"Leakage variant: {leakage_variant}")
-    print(f"資料筆數: {len(df_meta)}")
-    print("JTYPE 分布:")
-    print(df_meta['JTYPE'].value_counts().to_string())
-    print("VERDICT 分布:")
-    print(df_meta['VERDICT'].value_counts().to_string())
+    _log(f"資料集名稱: {dataset_name or 'all'}")
+    _log(f"Leakage variant: {leakage_variant}")
+    _log(f"資料筆數: {len(df_meta)}")
+    _log("JTYPE 分布:")
+    _log(df_meta['JTYPE'].value_counts().to_string())
+    _log("VERDICT 分布:")
+    _log(df_meta['VERDICT'].value_counts().to_string())
 
     df_removed_blank = df_meta[['JID', 'Text']].set_index('JID')
     labels = labels_all.set_index('JID')
@@ -105,15 +135,15 @@ def build_features(df_clean_path='../artifacts/reports/fact_removed_blank.xlsx',
     if remove_leakage:
         if leakage_terms_path is None:
             leakage_terms_path = os.path.join(lexicon_folder, 'leakage_terms.csv')
-        print(f"套用 leakage 清理: {leakage_terms_path}")
+        _log(f"套用 leakage 清理: {leakage_terms_path}")
         df_removed_blank['Text'] = remove_leakage_from_series(
             df_removed_blank['Text'], leakage_terms_path
         )
         cleaned_text_path = os.path.join(dataset_artifacts_folder, 'fact_removed_blank.xlsx')
         df_removed_blank.to_excel(cleaned_text_path)
-        print(f"leakage-cleaned text 已儲存為 {cleaned_text_path}")
+        _log(f"leakage-cleaned text 已儲存為 {cleaned_text_path}")
 
-    print("2. 準備 CKIP 斷詞模型與自定義字典...")
+    _log("2. 準備 CKIP 斷詞模型與自定義字典...")
     dictionary_path = os.path.join(dictionary_folder, 'articut_user_defined_dict.json')
     vocab_list = convert_dict_to_vocab_list(dictionary_path)
     
@@ -122,7 +152,7 @@ def build_features(df_clean_path='../artifacts/reports/fact_removed_blank.xlsx',
     old_legacy_word_seg_path = os.path.join(artifacts_folder, 'word_seg.xlsx')
     
     if os.path.exists(word_seg_path) and not force_recompute_seg:
-        print(f"找到已有的斷詞結果: {word_seg_path}，直接載入！")
+        _log(f"找到已有的斷詞結果: {word_seg_path}，直接載入！")
         df_word_seg = pd.read_excel(word_seg_path)
         df_word_seg.set_index('JID', inplace=True)
     elif (
@@ -131,49 +161,54 @@ def build_features(df_clean_path='../artifacts/reports/fact_removed_blank.xlsx',
         and os.path.exists(old_legacy_word_seg_path)
         and not force_recompute_seg
     ):
-        print(f"找到舊版全資料斷詞結果: {old_legacy_word_seg_path}，轉存為 with_leakage cache。")
+        _log(f"找到舊版全資料斷詞結果: {old_legacy_word_seg_path}，轉存為 with_leakage cache。")
         df_word_seg = pd.read_excel(old_legacy_word_seg_path)
         df_word_seg.set_index('JID', inplace=True)
         df_word_seg = df_word_seg.loc[df_removed_blank.index]
         df_word_seg.to_excel(word_seg_path)
-        print(f"全資料 with_leakage 斷詞結果已儲存為 {word_seg_path}")
+        _log(f"全資料 with_leakage 斷詞結果已儲存為 {word_seg_path}")
     elif (
         dataset_name
         and not remove_leakage
         and os.path.exists(legacy_word_seg_path)
         and not force_recompute_seg
     ):
-        print(f"找到全資料斷詞結果: {legacy_word_seg_path}，篩選為目前資料集後另存。")
+        _log(f"找到全資料斷詞結果: {legacy_word_seg_path}，篩選為目前資料集後另存。")
         df_word_seg = pd.read_excel(legacy_word_seg_path)
         df_word_seg.set_index('JID', inplace=True)
         df_word_seg = df_word_seg.loc[df_removed_blank.index]
         df_word_seg.to_excel(word_seg_path)
-        print(f"子資料集斷詞結果已儲存為 {word_seg_path}")
+        _log(f"子資料集斷詞結果已儲存為 {word_seg_path}")
     elif (
         dataset_name
         and not remove_leakage
         and os.path.exists(old_legacy_word_seg_path)
         and not force_recompute_seg
     ):
-        print(f"找到舊版全資料斷詞結果: {old_legacy_word_seg_path}，篩選為目前資料集後另存。")
+        _log(f"找到舊版全資料斷詞結果: {old_legacy_word_seg_path}，篩選為目前資料集後另存。")
         df_word_seg = pd.read_excel(old_legacy_word_seg_path)
         df_word_seg.set_index('JID', inplace=True)
         df_word_seg = df_word_seg.loc[df_removed_blank.index]
         df_word_seg.to_excel(word_seg_path)
-        print(f"子資料集斷詞結果已儲存為 {word_seg_path}")
+        _log(f"子資料集斷詞結果已儲存為 {word_seg_path}")
     else:
-        print("初始化 CkipWordSegmenter...")
+        _log("初始化 CkipWordSegmenter...")
         ws_driver = CkipWordSegmenter(model='albert-base', device=ckip_device)
 
         df_word_seg = df_removed_blank.copy()
-        print("開始執行 CKIP 斷詞迴圈...")
-        for jid, fact in tqdm(df_removed_blank.iterrows(), total=len(df_removed_blank)):
+        _log("開始執行 CKIP 斷詞迴圈...")
+        for jid, fact in tqdm(
+            df_removed_blank.iterrows(),
+            total=len(df_removed_blank),
+            desc=f"{dataset_name or 'all'} / {leakage_variant}",
+            disable=not show_progress,
+        ):
             ws_result = word_seg(fact['Text'], ws_driver, vocab_list, show_progress=False)
             df_word_seg.at[jid, 'Word Segmentation'] = str(ws_result)
         df_word_seg.to_excel(word_seg_path)
-        print(f"斷詞完成，結果已儲存為 {word_seg_path}")
+        _log(f"斷詞完成，結果已儲存為 {word_seg_path}")
 
-    print("3. 載入停用詞與刪除詞庫...")
+    _log("3. 載入停用詞與刪除詞庫...")
     stop_word_path = os.path.join(lexicon_folder, 'stopwords-ch-jiebar-zht.txt')
     with open(stop_word_path, 'r', encoding='utf-8') as f:
         stop_word = f.read().splitlines()
@@ -182,7 +217,7 @@ def build_features(df_clean_path='../artifacts/reports/fact_removed_blank.xlsx',
     with open(delete_vocab_path, 'r', encoding='utf-8') as f:
         delete_word = f.read().splitlines()
 
-    print("4. 生成 Document-Term Matrix (BoW, TF & TF-IDF)...")
+    _log("4. 生成 Document-Term Matrix (BoW, TF & TF-IDF)...")
     dtm_bow, dtm_csr_bow, doc_ids, vocab_bow, _ = get_dtm(
         df_word_seg, custom_tokenizer, stop_word, delete_word,
         strip_phrase=True, model='BoW', output_dir=dataset_features_folder
@@ -198,7 +233,7 @@ def build_features(df_clean_path='../artifacts/reports/fact_removed_blank.xlsx',
     assert (doc_ids == doc_ids_tf).all(), "TF doc_ids 與 BoW doc_ids 不一致"
     assert (doc_ids == doc_ids_tfidf).all(), "TF-IDF doc_ids 與 BoW doc_ids 不一致"
 
-    print("取得並儲存 verdict 判決結果陣列...")
+    _log("取得並儲存 verdict 判決結果陣列...")
     verdict_results = get_verdict_results(doc_ids, labels)
     verdict_out = os.path.join(dataset_artifacts_folder, 'verdict_results.xlsx')
     verdict_results.to_excel(verdict_out)
@@ -208,7 +243,7 @@ def build_features(df_clean_path='../artifacts/reports/fact_removed_blank.xlsx',
         doc_ids_out, encoding='utf-8-sig'
     )
 
-    print("特徵萃取完成！特徵結果與標籤集已儲存/更新。")
+    _log("特徵萃取完成！特徵結果與標籤集已儲存/更新。")
     return dtm_csr_bow, dtm_csr_tf, dtm_csr_tfidf
 
 if __name__ == '__main__':
