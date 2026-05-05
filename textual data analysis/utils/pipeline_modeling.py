@@ -509,7 +509,7 @@ def evaluate_majority_baseline(y_train, y_test):
     }
 
 
-def build_model_comparison(proposed_results, baseline_results=None):
+def build_model_comparison(proposed_results, baseline_results=None, proposed_name='Proposed MNIR + SVM'):
     """Combine final metrics from proposed and baseline models."""
     rows = []
     if baseline_results:
@@ -523,12 +523,93 @@ def build_model_comparison(proposed_results, baseline_results=None):
     metrics = proposed_results.get('test_metrics') if proposed_results else None
     if metrics is not None and not metrics.empty:
         row = metrics.iloc[0].to_dict()
-        row['Model'] = 'Proposed MNIR + SVM'
+        row['Model'] = proposed_name
         rows.append(row)
 
     if not rows:
         return pd.DataFrame()
     return pd.DataFrame(rows)
+
+
+def tune_chi2_k_with_direct_svm(
+    x_train,
+    y_train,
+    x_val,
+    y_val,
+    x_test,
+    k_values,
+    svm_grid=None,
+    representation='bow',
+):
+    """
+    Select chi-square K using Direct SVM validation Macro F1.
+
+    This is the independent Pipeline A tuner:
+    DTM -> train-only chi-square -> SVM validation grid.
+    """
+    if not k_values:
+        raise ValueError("k_values must contain at least one K value or None.")
+
+    tuning_rows = []
+    all_validation_rows = []
+    best_score = -np.inf
+    best_result = None
+
+    for k in k_values:
+        chi2_res = apply_chi2_feature_selection(
+            x_train,
+            y_train,
+            x_val,
+            x_test,
+            k=k,
+            output_dir=None,
+            representation=representation,
+        )
+        svm_res = evaluate_svm_grid(
+            chi2_res['x_train'],
+            y_train,
+            chi2_res['x_val'],
+            y_val,
+            chi2_res['x_test'],
+            None,
+            svm_grid=svm_grid,
+            evaluate_test=False,
+        )
+
+        validation_results = svm_res['validation_results'].assign(
+            K='all' if k is None else int(k),
+            Selected_Features=int(chi2_res['summary'].iloc[0]['selected_features']),
+            Feature_Variant=chi2_res['feature_variant'],
+        )
+        all_validation_rows.append(validation_results)
+        best_svm_row = validation_results.sort_values('Validation Macro F1', ascending=False).iloc[0]
+        selected_features = int(chi2_res['summary'].iloc[0]['selected_features'])
+        row = {
+            'K': 'all' if k is None else int(k),
+            'Selected Features': selected_features,
+            'Feature Variant': chi2_res['feature_variant'],
+            'Best C': svm_res['best_params']['C'],
+            'Validation Accuracy': float(best_svm_row['Validation Accuracy']),
+            'Validation Macro F1': float(best_svm_row['Validation Macro F1']),
+        }
+        tuning_rows.append(row)
+
+        if row['Validation Macro F1'] > best_score:
+            best_score = row['Validation Macro F1']
+            best_result = {
+                'best_k': k,
+                'best_row': row,
+                'chi2': chi2_res,
+                'svm_validation': svm_res,
+            }
+
+    tuning_results = pd.DataFrame(tuning_rows).sort_values('Validation Macro F1', ascending=False).reset_index(drop=True)
+    all_validation_results = pd.concat(all_validation_rows, ignore_index=True)
+    return {
+        'tuning_results': tuning_results,
+        'all_validation_results': all_validation_results,
+        **best_result,
+    }
 
 
 def tune_chi2_k_with_validation(
@@ -1009,6 +1090,200 @@ def run_step3_batch(
     return {
         'summary_df': summary_df,
         'failures_df': failures_df,
+    }
+
+
+def run_direct_svm_experiment(
+    dataset_name,
+    remove_leakage,
+    representation='bow',
+    run_mode='quick',
+    run_tag=None,
+    max_rows=1200,
+    chi2_k_grid=None,
+    svm_c_grid=None,
+    train_size=0.70,
+    val_size=0.10,
+    test_size=0.20,
+    random_state=42,
+    features_folder='../artifacts/features/dtm',
+    artifacts_folder='../artifacts/reports',
+    include_dataset_summary=True,
+):
+    """Run Pipeline A: DTM -> chi-square K tuning -> Direct SVM."""
+    representation = _safe_slug(representation.lower().replace('-', '_'))
+    if representation == 'tf_idf':
+        representation = 'tfidf'
+    run_tag = run_tag or run_mode
+    chi2_k_grid = chi2_k_grid or [500, 1000]
+    svm_c_grid = svm_c_grid or [0.25, 1.0]
+
+    modeling_data = load_modeling_data(
+        dataset_name=dataset_name,
+        remove_leakage=remove_leakage,
+        representation=representation,
+        features_folder=features_folder,
+        artifacts_folder=artifacts_folder,
+    )
+    sampled_data = stratified_sample_modeling_data(
+        modeling_data['x'],
+        modeling_data['y'],
+        max_rows=max_rows,
+        random_state=random_state,
+    )
+    split_data = split_modeling_data(
+        sampled_data['x'],
+        sampled_data['y'],
+        train_size=train_size,
+        val_size=val_size,
+        test_size=test_size,
+        random_state=random_state,
+        stratify=True,
+    )
+
+    chi2_tuning = tune_chi2_k_with_direct_svm(
+        split_data['x_train'],
+        split_data['y_train'],
+        split_data['x_val'],
+        split_data['y_val'],
+        split_data['x_test'],
+        k_values=chi2_k_grid,
+        svm_grid=svm_c_grid,
+        representation=representation,
+    )
+    chi2_data = chi2_tuning['chi2']
+    best_chi2_k = chi2_tuning['best_k']
+
+    output_dir = os.path.join(
+        artifacts_folder,
+        modeling_data['dataset_slug'],
+        modeling_data['leakage_variant'],
+        representation,
+        'step4_direct_svm_runs',
+        run_tag,
+    )
+    if chi2_data['selected_feature_indices'] is not None:
+        os.makedirs(output_dir, exist_ok=True)
+        np.save(os.path.join(output_dir, 'direct_svm_chi2_selected_feature_indices.npy'), chi2_data['selected_feature_indices'])
+
+    direct_svm_results = evaluate_svm_grid(
+        chi2_data['x_train'],
+        split_data['y_train'],
+        chi2_data['x_val'],
+        split_data['y_val'],
+        chi2_data['x_test'],
+        split_data['y_test'],
+        svm_grid=svm_c_grid,
+        evaluate_test=True,
+    )
+    baseline_results = {
+        'Majority Class': evaluate_majority_baseline(
+            split_data['y_train'],
+            split_data['y_test'],
+        ),
+    }
+    direct_model_name = f'{representation.upper()} + Direct SVM'
+    model_comparison = build_model_comparison(
+        direct_svm_results,
+        baseline_results,
+        proposed_name=direct_model_name,
+    )
+
+    run_config = {
+        'run_mode': run_mode,
+        'run_tag': run_tag,
+        'dataset_name': dataset_name,
+        'dataset_slug': modeling_data['dataset_slug'],
+        'remove_leakage': remove_leakage,
+        'leakage_variant': modeling_data['leakage_variant'],
+        'representation': representation,
+        'dtm_path': modeling_data['dtm_path'],
+        'max_rows': max_rows,
+        'train_size': train_size,
+        'val_size': val_size,
+        'test_size': test_size,
+        'random_state': random_state,
+        'chi2_k_grid': chi2_k_grid,
+        'svm_c_grid': svm_c_grid,
+        'best_direct_chi2_k': 'all' if best_chi2_k is None else best_chi2_k,
+        'best_direct_svm_c': direct_svm_results['best_params']['C'],
+        'model_name': direct_model_name,
+    }
+    dataset_summary = load_jtype_verdict_summary(artifacts_folder=artifacts_folder) if include_dataset_summary else None
+    saved_paths = save_step3_artifacts(
+        output_dir=output_dir,
+        chi2_tuning=chi2_tuning,
+        svm_results=direct_svm_results,
+        modeling_data=modeling_data,
+        sampled_data=sampled_data,
+        split_data=split_data,
+        run_config=run_config,
+        baseline_results=baseline_results,
+        model_comparison=model_comparison,
+        dataset_summary=dataset_summary,
+    )
+
+    return {
+        'run_config': run_config,
+        'output_dir': output_dir,
+        'saved_paths': saved_paths,
+        'modeling_data': modeling_data,
+        'sampled_data': sampled_data,
+        'split_data': split_data,
+        'chi2_tuning': chi2_tuning,
+        'chi2_data': chi2_data,
+        'direct_svm_results': direct_svm_results,
+        'baseline_results': baseline_results,
+        'model_comparison': model_comparison,
+    }
+
+
+def run_direct_svm_batch(
+    dataset_names,
+    remove_leakage_values,
+    representations,
+    run_mode='quick',
+    run_tag=None,
+    **kwargs,
+):
+    """Run Pipeline A over dataset x leakage x representation combinations."""
+    results = []
+    failures = []
+    run_tag = run_tag or run_mode
+    for dataset_name in dataset_names:
+        for remove_leakage in remove_leakage_values:
+            for representation in representations:
+                try:
+                    print(
+                        f"[Step4 Direct SVM] {dataset_name} / "
+                        f"{'no_leakage' if remove_leakage else 'with_leakage'} / {representation}"
+                    )
+                    result = run_direct_svm_experiment(
+                        dataset_name=dataset_name,
+                        remove_leakage=remove_leakage,
+                        representation=representation,
+                        run_mode=run_mode,
+                        run_tag=run_tag,
+                        **kwargs,
+                    )
+                    metrics = result['direct_svm_results']['test_metrics'].iloc[0].to_dict()
+                    results.append({
+                        **result['run_config'],
+                        'output_dir': result['output_dir'],
+                        'Test Accuracy': metrics.get('Test Accuracy'),
+                        'Test Macro F1': metrics.get('Test Macro F1'),
+                    })
+                except Exception as exc:
+                    failures.append({
+                        'dataset_name': dataset_name,
+                        'remove_leakage': remove_leakage,
+                        'representation': representation,
+                        'error': repr(exc),
+                    })
+
+    return {
+        'summary_df': pd.DataFrame(results),
+        'failures_df': pd.DataFrame(failures),
     }
 
 
