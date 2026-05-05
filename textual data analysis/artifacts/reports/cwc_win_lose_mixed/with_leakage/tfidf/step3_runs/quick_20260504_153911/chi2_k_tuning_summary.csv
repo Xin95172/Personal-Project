@@ -1,0 +1,3 @@
+﻿,K,Selected Features,Feature Variant,Best C,Validation Accuracy,Validation Macro F1
+0,1000,1000,tfidf_chi2_k1000,0.25,0.825,0.5452001554605519
+1,500,500,tfidf_chi2_k500,0.25,0.8083333333333333,0.5328669516776784

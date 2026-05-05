@@ -1,0 +1,3 @@
+﻿,Model,C,Validation Accuracy,Validation Macro F1
+0,SVM (C=0.25),0.25,0.65,0.4115012858029618
+1,SVM (C=1.0),1.0,0.625,0.3639846743295019

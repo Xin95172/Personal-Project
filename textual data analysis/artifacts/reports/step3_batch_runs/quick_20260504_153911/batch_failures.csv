@@ -1,0 +1,7 @@
+﻿dataset_name,remove_leakage,representation,error
+criminal_win_lose_mixed,False,bow,"ValueError('The least populated class in y has only 1 member, which is too few. The minimum number of groups for any class cannot be less than 2.')"
+criminal_win_lose_mixed,False,tf,"ValueError('The least populated class in y has only 1 member, which is too few. The minimum number of groups for any class cannot be less than 2.')"
+criminal_win_lose_mixed,False,tfidf,"ValueError('The least populated class in y has only 1 member, which is too few. The minimum number of groups for any class cannot be less than 2.')"
+criminal_win_lose_mixed,True,bow,"ValueError('The least populated class in y has only 1 member, which is too few. The minimum number of groups for any class cannot be less than 2.')"
+criminal_win_lose_mixed,True,tf,"ValueError('The least populated class in y has only 1 member, which is too few. The minimum number of groups for any class cannot be less than 2.')"
+criminal_win_lose_mixed,True,tfidf,"ValueError('The least populated class in y has only 1 member, which is too few. The minimum number of groups for any class cannot be less than 2.')"

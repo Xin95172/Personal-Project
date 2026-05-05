@@ -1,0 +1,4 @@
+﻿,split,rows,features
+0,train,3961,24425
+1,validation,566,24425
+2,test,1133,24425

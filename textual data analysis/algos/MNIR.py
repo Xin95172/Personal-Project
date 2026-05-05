@@ -1,15 +1,22 @@
+from __future__ import annotations
+
 from typing import Any, Callable, Protocol, cast
 
 from pathlib import Path
 import re
+import shutil
+import subprocess
+import tempfile
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
-import rpy2.robjects as robjects
-from rpy2.robjects import RS4
-from rpy2.robjects.packages import importr
+from scipy.io import mmwrite
+
+robjects = None
+RS4 = Any
+importr = None
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -41,10 +48,135 @@ def _as_callable(obj: Any, name: str) -> Callable[..., Any]:
     return fn
 
 
+def _run_mnir_rscript(
+    X_train: sp.spmatrix,
+    y_train: np.ndarray,
+    X_val: sp.spmatrix | None,
+    X_test: sp.spmatrix | None,
+    model_path: Path,
+) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None]:
+    rscript = shutil.which("Rscript")
+    if rscript is None:
+        raise RuntimeError("Rscript not found on PATH. Activate the tm environment and install r-base.")
+
+    y_arr = _to_1d_labels(y_train, name="y_train")
+    if np.issubdtype(y_arr.dtype, np.number):
+        y_for_r = y_arr.astype(float)
+    else:
+        y_for_r = LabelEncoder().fit_transform(y_arr).astype(float)
+
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="mnir_r_") as tmp:
+        tmp_dir = Path(tmp)
+        train_mtx = tmp_dir / "x_train.mtx"
+        val_mtx = tmp_dir / "x_val.mtx"
+        test_mtx = tmp_dir / "x_test.mtx"
+        y_path = tmp_dir / "y_train.csv"
+        z_train_path = tmp_dir / "z_train.csv"
+        z_val_path = tmp_dir / "z_val.csv"
+        z_test_path = tmp_dir / "z_test.csv"
+        script_path = tmp_dir / "run_mnir.R"
+
+        mmwrite(train_mtx, sp.csc_matrix(X_train))
+        pd.Series(y_for_r).to_csv(y_path, index=False, header=False)
+        has_val = X_val is not None
+        has_test = X_test is not None
+        if has_val:
+            mmwrite(val_mtx, sp.csc_matrix(X_val))
+        if has_test:
+            mmwrite(test_mtx, sp.csc_matrix(X_test))
+
+        script_path.write_text(
+            """
+args <- commandArgs(trailingOnly = TRUE)
+x_train_path <- args[[1]]
+y_path <- args[[2]]
+model_path <- args[[3]]
+z_train_path <- args[[4]]
+x_val_path <- args[[5]]
+z_val_path <- args[[6]]
+x_test_path <- args[[7]]
+z_test_path <- args[[8]]
+
+suppressPackageStartupMessages(library(Matrix))
+suppressPackageStartupMessages(library(textir))
+
+read_counts <- function(path) {
+  x <- Matrix::readMM(path)
+  as(x, "dgCMatrix")
+}
+
+write_z <- function(z, path) {
+  z <- as.matrix(z)
+  write.table(z, file = path, sep = ",", row.names = FALSE, col.names = FALSE)
+}
+
+x_train <- read_counts(x_train_path)
+y <- scan(y_path, what = numeric(), sep = ",", quiet = TRUE)
+model <- textir::mnlm(cl = NULL, covars = y, counts = x_train)
+saveRDS(model, model_path)
+write_z(textir::srproj(model, counts = x_train), z_train_path)
+
+if (nzchar(x_val_path)) {
+  write_z(textir::srproj(model, counts = read_counts(x_val_path)), z_val_path)
+}
+if (nzchar(x_test_path)) {
+  write_z(textir::srproj(model, counts = read_counts(x_test_path)), z_test_path)
+}
+""",
+            encoding="utf-8",
+        )
+
+        cmd = [
+            rscript,
+            str(script_path),
+            str(train_mtx),
+            str(y_path),
+            str(model_path),
+            str(z_train_path),
+            str(val_mtx if has_val else ""),
+            str(z_val_path),
+            str(test_mtx if has_test else ""),
+            str(z_test_path),
+        ]
+        completed = subprocess.run(cmd, text=True, capture_output=True, check=False)
+        if completed.returncode != 0:
+            raise RuntimeError(
+                "Rscript MNIR run failed.\n"
+                f"STDOUT:\n{completed.stdout}\n"
+                f"STDERR:\n{completed.stderr}"
+            )
+
+        def _read_z(path: Path, expected_rows: int) -> np.ndarray:
+            z = np.loadtxt(path, delimiter=",")
+            if z.ndim == 1:
+                z = z.reshape(1, -1) if expected_rows == 1 else z.reshape(-1, 1)
+            return z
+
+        z_train = _read_z(z_train_path, X_train.shape[0])
+        z_val = _read_z(z_val_path, X_val.shape[0]) if has_val else None
+        z_test = _read_z(z_test_path, X_test.shape[0]) if has_test else None
+        return z_train, z_val, z_test
+
+
 class RTextirWrapper:
     """Python 對 R 套件 textir 的簡單包裝。"""
 
     def __init__(self, auto_install: bool = False, cran_mirror: str = "https://cloud.r-project.org"):
+        global robjects, RS4, importr
+        if robjects is None or importr is None:
+            try:
+                import rpy2.robjects as _robjects
+                from rpy2.robjects import RS4 as _RS4
+                from rpy2.robjects.packages import importr as _importr
+                robjects = _robjects
+                RS4 = _RS4
+                importr = _importr
+            except Exception as err:
+                raise RuntimeError(
+                    "rpy2 is not usable in this environment. Use the Rscript MNIR path instead."
+                ) from err
+
         self.model: Any = None
         self.base: Any = None
         self.utils: Any = None
@@ -549,19 +681,31 @@ def fit_and_save_feature_splits(
     model_name: str = "mnir_mnlm_model.rds",
     auto_install: bool = False,
 ) -> dict[str, Any]:
-    extractor = MNIRFeatureExtractor(RTextirWrapper(auto_install=auto_install))
     features_dir = _ensure_features_dir(output_dir)
-    extractor.fit(
-        X_train,
-        y_train,
-        load_cached=False,
-        cache_path=features_dir / train_name,
-        model_path=features_dir / model_name,
-    )
+    model_path = features_dir / model_name
 
-    z_train = extractor.get_train_features()
-    z_val = extractor.transform(X_val) if X_val is not None else None
-    z_test = extractor.transform(X_test) if X_test is not None else None
+    if robjects is None or importr is None:
+        z_train, z_val, z_test = _run_mnir_rscript(
+            X_train=X_train,
+            y_train=y_train,
+            X_val=X_val,
+            X_test=X_test,
+            model_path=model_path,
+        )
+        extractor = None
+    else:
+        extractor = MNIRFeatureExtractor(RTextirWrapper(auto_install=auto_install))
+        extractor.fit(
+            X_train,
+            y_train,
+            load_cached=False,
+            cache_path=features_dir / train_name,
+            model_path=model_path,
+        )
+
+        z_train = extractor.get_train_features()
+        z_val = extractor.transform(X_val) if X_val is not None else None
+        z_test = extractor.transform(X_test) if X_test is not None else None
 
     saved_paths = save_feature_splits(
         z_train=z_train,
@@ -578,7 +722,7 @@ def fit_and_save_feature_splits(
         "z_val": z_val,
         "z_test": z_test,
         "paths": saved_paths,
-        "model_path": features_dir / model_name,
+        "model_path": model_path,
     }
 
 
@@ -611,24 +755,38 @@ def load_or_fit_feature_splits(
 
     cache_ready = all(path.exists() for path in required_paths)
     if cache_ready:
-        result: dict[str, Any] = {
-            "z_train": load_feature_matrix(train_path),
-            "z_val": load_feature_matrix(val_path) if X_val is not None else None,
-            "z_test": load_feature_matrix(test_path) if X_test is not None else None,
-            "paths": {
-                "train": train_path,
-                **({"val": val_path} if X_val is not None else {}),
-                **({"test": test_path} if X_test is not None else {}),
-            },
-            "model_path": model_path,
-            "loaded_from_cache": True,
-        }
-        if require_model:
-            extractor = MNIRFeatureExtractor(RTextirWrapper(auto_install=auto_install))
-            extractor.load_model(model_path)
-            extractor.load_train_features(train_path)
-            result["extractor"] = extractor
-        return result
+        z_train = load_feature_matrix(train_path)
+        z_val = load_feature_matrix(val_path) if X_val is not None else None
+        z_test = load_feature_matrix(test_path) if X_test is not None else None
+        cache_shape_matches = (
+            z_train.shape[0] == X_train.shape[0]
+            and (X_val is None or z_val.shape[0] == X_val.shape[0])
+            and (X_test is None or z_test.shape[0] == X_test.shape[0])
+        )
+        if not cache_shape_matches:
+            print(
+                "[MNIR] cached feature shape does not match current split; "
+                "recomputing MNIR features."
+            )
+        else:
+            result: dict[str, Any] = {
+                "z_train": z_train,
+                "z_val": z_val,
+                "z_test": z_test,
+                "paths": {
+                    "train": train_path,
+                    **({"val": val_path} if X_val is not None else {}),
+                    **({"test": test_path} if X_test is not None else {}),
+                },
+                "model_path": model_path,
+                "loaded_from_cache": True,
+            }
+            if require_model and robjects is not None and importr is not None:
+                extractor = MNIRFeatureExtractor(RTextirWrapper(auto_install=auto_install))
+                extractor.load_model(model_path)
+                extractor.load_train_features(train_path)
+                result["extractor"] = extractor
+            return result
 
     result = fit_and_save_feature_splits(
         X_train=X_train,

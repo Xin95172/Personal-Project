@@ -1,5 +1,7 @@
 import os
 import re
+import shutil
+import subprocess
 
 import numpy as np
 import pandas as pd
@@ -12,7 +14,83 @@ from sklearn.model_selection import train_test_split
 from algos.svm import SVMClassifier
 
 
+def check_mnir_runtime(require_textir=True):
+    """Return MNIR R runtime diagnostics for the active Python environment."""
+    diagnostics = {
+        'python_executable': os.sys.executable,
+        'R_HOME': os.environ.get('R_HOME'),
+        'R_on_path': shutil.which('R'),
+        'Rscript_on_path': shutil.which('Rscript'),
+        'R_version': None,
+        'Matrix': None,
+        'textir': None,
+        'error': None,
+        'ok': False,
+    }
+
+    if diagnostics['Rscript_on_path'] is None:
+        diagnostics['error'] = 'Rscript not found on PATH.'
+        return diagnostics
+
+    packages = "c('Matrix','textir')" if require_textir else "c('Matrix')"
+    r_code = (
+        "cat(R.version.string, '\\n'); "
+        f"for (pkg in {packages}) {{ "
+        "cat(pkg, ':', requireNamespace(pkg, quietly=TRUE), '\\n') "
+        "}"
+    )
+    completed = subprocess.run(
+        [diagnostics['Rscript_on_path'], '-e', r_code],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        diagnostics['error'] = completed.stderr.strip() or completed.stdout.strip()
+        return diagnostics
+
+    lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+    if lines:
+        diagnostics['R_version'] = lines[0]
+    for line in lines[1:]:
+        if line.startswith('Matrix :'):
+            diagnostics['Matrix'] = 'ok' if line.endswith('TRUE') else 'missing'
+        elif line.startswith('textir :'):
+            diagnostics['textir'] = 'ok' if line.endswith('TRUE') else 'missing'
+    if not require_textir:
+        diagnostics['textir'] = 'not_checked'
+
+    diagnostics['ok'] = (
+        diagnostics['Rscript_on_path'] is not None
+        and diagnostics['Matrix'] == 'ok'
+        and (diagnostics['textir'] == 'ok' or not require_textir)
+    )
+    return diagnostics
+
+
+def assert_mnir_runtime_ready():
+    diagnostics = check_mnir_runtime(require_textir=True)
+    if diagnostics['ok']:
+        return diagnostics
+
+    fix_hint = (
+        "MNIR runtime is not ready in the active environment.\n"
+        f"Python: {diagnostics['python_executable']}\n"
+        f"R_HOME: {diagnostics['R_HOME']}\n"
+        f"R on PATH: {diagnostics['R_on_path']}\n"
+        f"Rscript on PATH: {diagnostics['Rscript_on_path']}\n"
+        f"R version: {diagnostics['R_version']}\n"
+        f"Matrix: {diagnostics['Matrix']}\n"
+        f"textir: {diagnostics['textir']}\n"
+        f"Error: {diagnostics['error']}\n\n"
+        "Fix in the tm environment by installing R packages Matrix, gamlr, distrom, "
+        "and textir, then restart the notebook kernel."
+    )
+    raise RuntimeError(fix_hint)
+
+
 def _load_mnir_functions():
+    assert_mnir_runtime_ready()
     try:
         from algos.MNIR import load_or_fit_feature_splits, summarize_predictions
     except Exception as exc:
@@ -35,6 +113,7 @@ def resolve_modeling_paths(
     features_folder='../artifacts/features/dtm',
     artifacts_folder='../artifacts/reports',
     dtm_bow_path=None,
+    dtm_tf_path=None,
     dtm_tfidf_path=None,
     verdict_results_path=None,
 ):
@@ -56,6 +135,7 @@ def resolve_modeling_paths(
         'dataset_slug': dataset_slug,
         'leakage_variant': leakage_variant,
         'dtm_bow_path': dtm_bow_path or os.path.join(dtm_folder, 'dtm_csr_BoW.npz'),
+        'dtm_tf_path': dtm_tf_path or os.path.join(dtm_folder, 'dtm_csr_TF.npz'),
         'dtm_tfidf_path': dtm_tfidf_path or os.path.join(dtm_folder, 'dtm_csr_TF_IDF.npz'),
         'verdict_results_path': verdict_results_path or os.path.join(report_folder, 'verdict_results.xlsx'),
     }
@@ -64,40 +144,59 @@ def resolve_modeling_paths(
 def load_modeling_data(
     dataset_name=None,
     remove_leakage=False,
+    representation='bow',
     features_folder='../artifacts/features/dtm',
     artifacts_folder='../artifacts/reports',
     dtm_bow_path=None,
+    dtm_tf_path=None,
     dtm_tfidf_path=None,
     verdict_results_path=None,
 ):
-    """Load BoW features and labels for Step 3."""
+    """Load one Step 3 feature representation and labels."""
     paths = resolve_modeling_paths(
         dataset_name=dataset_name,
         remove_leakage=remove_leakage,
         features_folder=features_folder,
         artifacts_folder=artifacts_folder,
         dtm_bow_path=dtm_bow_path,
+        dtm_tf_path=dtm_tf_path,
         dtm_tfidf_path=dtm_tfidf_path,
         verdict_results_path=verdict_results_path,
     )
 
-    if not os.path.exists(paths['dtm_bow_path']):
-        raise FileNotFoundError(f"DTM file not found: {paths['dtm_bow_path']}")
+    representation = representation.lower().replace('-', '_')
+    representation_paths = {
+        'bow': paths['dtm_bow_path'],
+        'tf': paths['dtm_tf_path'],
+        'tfidf': paths['dtm_tfidf_path'],
+        'tf_idf': paths['dtm_tfidf_path'],
+    }
+    if representation not in representation_paths:
+        raise ValueError("representation must be one of: bow, tf, tfidf")
+
+    dtm_path = representation_paths[representation]
+    representation_slug = 'tfidf' if representation == 'tf_idf' else representation
+
+    if not os.path.exists(dtm_path):
+        raise FileNotFoundError(f"DTM file not found: {dtm_path}")
     if not os.path.exists(paths['verdict_results_path']):
         raise FileNotFoundError(f"Label file not found: {paths['verdict_results_path']}")
 
-    x_bow = sp.load_npz(paths['dtm_bow_path'])
+    x = sp.load_npz(dtm_path)
     y = pd.read_excel(paths['verdict_results_path'], index_col=0).to_numpy().ravel()
 
-    if x_bow.shape[0] != len(y):
+    if x.shape[0] != len(y):
         raise ValueError(
-            f"Feature/label row mismatch: X has {x_bow.shape[0]} rows, y has {len(y)} labels."
+            f"Feature/label row mismatch: X has {x.shape[0]} rows, y has {len(y)} labels."
         )
 
     label_counts = pd.Series(y, name='VERDICT').value_counts().rename_axis('label').reset_index(name='count')
     return {
         **paths,
-        'x_bow': x_bow,
+        'representation': representation_slug,
+        'dtm_path': dtm_path,
+        'x': x,
+        'x_bow': x,
         'y': y,
         'label_counts': label_counts,
     }
@@ -224,8 +323,10 @@ def apply_chi2_feature_selection(
     x_test,
     k=5000,
     output_dir=None,
+    representation='bow',
 ):
     """Fit chi-square feature selection on train only, then transform val/test."""
+    representation = _safe_slug(representation)
     if k is None:
         return {
             'x_train': x_train,
@@ -233,7 +334,7 @@ def apply_chi2_feature_selection(
             'x_test': x_test,
             'selector': None,
             'selected_feature_indices': None,
-            'feature_variant': 'bow',
+            'feature_variant': representation,
             'summary': pd.DataFrame(
                 [{'step': 'chi2', 'original_features': x_train.shape[1], 'selected_features': x_train.shape[1]}]
             ),
@@ -260,7 +361,7 @@ def apply_chi2_feature_selection(
         'x_test': x_test_selected,
         'selector': selector,
         'selected_feature_indices': selected_feature_indices,
-        'feature_variant': f'bow_chi2_k{actual_k}',
+        'feature_variant': f'{representation}_chi2_k{actual_k}',
         'summary': pd.DataFrame(
             [{'step': 'chi2', 'original_features': x_train.shape[1], 'selected_features': actual_k}]
         ),
@@ -286,10 +387,10 @@ def run_mnir_feature_extraction(
         X_val=x_val,
         X_test=x_test,
         output_dir=mnir_output_dir,
-        train_name='mnir_z_train_bow.npy',
-        val_name='mnir_z_val_bow.npy',
-        test_name='mnir_z_test_bow.npy',
-        model_name='mnir_mnlm_bow.rds',
+        train_name='mnir_z_train.npy',
+        val_name='mnir_z_val.npy',
+        test_name='mnir_z_test.npy',
+        model_name='mnir_mnlm.rds',
     )
     return {
         **feature_res,
@@ -355,7 +456,9 @@ def evaluate_svm_grid(
             }
         ]
     )
-    test_report = pd.DataFrame(classification_report(y_test, y_test_pred, output_dict=True)).transpose()
+    test_report = pd.DataFrame(
+        classification_report(y_test, y_test_pred, output_dict=True, zero_division=0)
+    ).transpose()
     labels = sorted(pd.unique(np.concatenate([y_test, y_test_pred])))
     cm = pd.DataFrame(
         confusion_matrix(y_test, y_test_pred, labels=labels),
@@ -439,6 +542,7 @@ def tune_chi2_k_with_validation(
     leakage_variant='with_leakage',
     mnir_features_folder='../artifacts/features/mnir',
     svm_grid=None,
+    representation='bow',
 ):
     """
     Select chi-square K using validation Macro F1.
@@ -462,6 +566,7 @@ def tune_chi2_k_with_validation(
             x_test,
             k=k,
             output_dir=None,
+            representation=representation,
         )
         feature_variant = chi2_res['feature_variant']
         mnir_res = run_mnir_feature_extraction(
@@ -696,6 +801,215 @@ def save_step3_artifacts(
         saved_paths['artifact_index.csv'] = saved_index_path
 
     return saved_paths
+
+
+def run_step3_experiment(
+    dataset_name,
+    remove_leakage,
+    representation='bow',
+    run_mode='quick',
+    run_tag=None,
+    max_rows=1200,
+    chi2_k_grid=None,
+    svm_c_grid=None,
+    train_size=0.70,
+    val_size=0.10,
+    test_size=0.20,
+    random_state=42,
+    features_folder='../artifacts/features/dtm',
+    artifacts_folder='../artifacts/reports',
+    mnir_features_folder='../artifacts/features/mnir',
+    include_dataset_summary=True,
+):
+    """Run one complete Step 3 experiment and save its artifacts."""
+    representation = _safe_slug(representation.lower().replace('-', '_'))
+    if representation == 'tf_idf':
+        representation = 'tfidf'
+    run_tag = run_tag or run_mode
+    chi2_k_grid = chi2_k_grid or [500, 1000]
+    svm_c_grid = svm_c_grid or [0.25, 1.0]
+
+    modeling_data = load_modeling_data(
+        dataset_name=dataset_name,
+        remove_leakage=remove_leakage,
+        representation=representation,
+        features_folder=features_folder,
+        artifacts_folder=artifacts_folder,
+    )
+    sampled_data = stratified_sample_modeling_data(
+        modeling_data['x'],
+        modeling_data['y'],
+        max_rows=max_rows,
+        random_state=random_state,
+    )
+    split_data = split_modeling_data(
+        sampled_data['x'],
+        sampled_data['y'],
+        train_size=train_size,
+        val_size=val_size,
+        test_size=test_size,
+        random_state=random_state,
+        stratify=True,
+    )
+
+    chi2_tuning = tune_chi2_k_with_validation(
+        split_data['x_train'],
+        split_data['y_train'],
+        split_data['x_val'],
+        split_data['y_val'],
+        split_data['x_test'],
+        k_values=chi2_k_grid,
+        dataset_slug=modeling_data['dataset_slug'],
+        leakage_variant=modeling_data['leakage_variant'],
+        mnir_features_folder=mnir_features_folder,
+        svm_grid=svm_c_grid,
+        representation=representation,
+    )
+
+    chi2_data = chi2_tuning['chi2']
+    mnir_data = chi2_tuning['mnir']
+    best_chi2_k = chi2_tuning['best_k']
+
+    if chi2_data['selected_feature_indices'] is not None:
+        os.makedirs(mnir_data['mnir_output_dir'], exist_ok=True)
+        selected_idx_path = os.path.join(mnir_data['mnir_output_dir'], 'chi2_selected_feature_indices.npy')
+        np.save(selected_idx_path, chi2_data['selected_feature_indices'])
+
+    svm_results = evaluate_svm_grid(
+        mnir_data['z_train'],
+        split_data['y_train'],
+        mnir_data['z_val'],
+        split_data['y_val'],
+        mnir_data['z_test'],
+        split_data['y_test'],
+        svm_grid=svm_c_grid,
+        evaluate_test=True,
+    )
+    baseline_results = {
+        'Majority Class': evaluate_majority_baseline(
+            split_data['y_train'],
+            split_data['y_test'],
+        ),
+        f'{representation.upper()} + SVM': evaluate_svm_grid(
+            chi2_data['x_train'],
+            split_data['y_train'],
+            chi2_data['x_val'],
+            split_data['y_val'],
+            chi2_data['x_test'],
+            split_data['y_test'],
+            svm_grid=svm_c_grid,
+            evaluate_test=True,
+        ),
+    }
+    model_comparison = build_model_comparison(svm_results, baseline_results)
+
+    output_dir = os.path.join(
+        artifacts_folder,
+        modeling_data['dataset_slug'],
+        modeling_data['leakage_variant'],
+        representation,
+        'step3_runs',
+        run_tag,
+    )
+    run_config = {
+        'run_mode': run_mode,
+        'run_tag': run_tag,
+        'dataset_name': dataset_name,
+        'dataset_slug': modeling_data['dataset_slug'],
+        'remove_leakage': remove_leakage,
+        'leakage_variant': modeling_data['leakage_variant'],
+        'representation': representation,
+        'dtm_path': modeling_data['dtm_path'],
+        'max_rows': max_rows,
+        'train_size': train_size,
+        'val_size': val_size,
+        'test_size': test_size,
+        'random_state': random_state,
+        'chi2_k_grid': chi2_k_grid,
+        'svm_c_grid': svm_c_grid,
+        'best_chi2_k': 'all' if best_chi2_k is None else best_chi2_k,
+        'best_svm_c': svm_results['best_params']['C'],
+        'baseline_models': list(baseline_results.keys()),
+    }
+    dataset_summary = load_jtype_verdict_summary(artifacts_folder=artifacts_folder) if include_dataset_summary else None
+    saved_paths = save_step3_artifacts(
+        output_dir=output_dir,
+        chi2_tuning=chi2_tuning,
+        svm_results=svm_results,
+        modeling_data=modeling_data,
+        sampled_data=sampled_data,
+        split_data=split_data,
+        run_config=run_config,
+        baseline_results=baseline_results,
+        model_comparison=model_comparison,
+        dataset_summary=dataset_summary,
+    )
+
+    return {
+        'run_config': run_config,
+        'output_dir': output_dir,
+        'saved_paths': saved_paths,
+        'modeling_data': modeling_data,
+        'sampled_data': sampled_data,
+        'split_data': split_data,
+        'chi2_tuning': chi2_tuning,
+        'chi2_data': chi2_data,
+        'mnir_data': mnir_data,
+        'svm_results': svm_results,
+        'baseline_results': baseline_results,
+        'model_comparison': model_comparison,
+    }
+
+
+def run_step3_batch(
+    dataset_names,
+    remove_leakage_values,
+    representations,
+    run_mode='quick',
+    run_tag=None,
+    **kwargs,
+):
+    """Run Step 3 over dataset x leakage x representation combinations."""
+    results = []
+    failures = []
+    run_tag = run_tag or run_mode
+    for dataset_name in dataset_names:
+        for remove_leakage in remove_leakage_values:
+            for representation in representations:
+                try:
+                    print(
+                        f"[Step3] {dataset_name} / "
+                        f"{'no_leakage' if remove_leakage else 'with_leakage'} / {representation}"
+                    )
+                    result = run_step3_experiment(
+                        dataset_name=dataset_name,
+                        remove_leakage=remove_leakage,
+                        representation=representation,
+                        run_mode=run_mode,
+                        run_tag=run_tag,
+                        **kwargs,
+                    )
+                    metrics = result['svm_results']['test_metrics'].iloc[0].to_dict()
+                    results.append({
+                        **result['run_config'],
+                        'output_dir': result['output_dir'],
+                        'Test Accuracy': metrics.get('Test Accuracy'),
+                        'Test Macro F1': metrics.get('Test Macro F1'),
+                    })
+                except Exception as exc:
+                    failures.append({
+                        'dataset_name': dataset_name,
+                        'remove_leakage': remove_leakage,
+                        'representation': representation,
+                        'error': repr(exc),
+                    })
+
+    summary_df = pd.DataFrame(results)
+    failures_df = pd.DataFrame(failures)
+    return {
+        'summary_df': summary_df,
+        'failures_df': failures_df,
+    }
 
 
 def evaluate_all_models(
