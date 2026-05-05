@@ -720,6 +720,7 @@ def save_step3_artifacts(
     baseline_results=None,
     model_comparison=None,
     dataset_summary=None,
+    direct_svm_tuning=None,
 ):
     """Save Step 3 tables and parameter-surface plots."""
     os.makedirs(output_dir, exist_ok=True)
@@ -806,6 +807,61 @@ def save_step3_artifacts(
             fig.savefig(path, dpi=160)
             plt.close(fig)
             saved_paths['chi2_k_svm_c_validation_heatmap.png'] = path
+
+    if direct_svm_tuning is not None:
+        direct_tuning_results = direct_svm_tuning.get('tuning_results')
+        direct_validation_results = direct_svm_tuning.get('all_validation_results')
+        _save_df('direct_svm_chi2_k_tuning_summary.csv', direct_tuning_results)
+        _save_df('direct_svm_chi2_k_svm_validation_grid.csv', direct_validation_results)
+
+        if direct_tuning_results is not None and not direct_tuning_results.empty:
+            plot_df = direct_tuning_results.copy()
+            plot_df = plot_df.sort_values('K', key=lambda s: s.map(_k_sort_key))
+            x_labels = plot_df['K'].astype(str).tolist()
+            fig, ax = plt.subplots(figsize=(8, 4.5))
+            ax.plot(x_labels, plot_df['Validation Macro F1'], marker='o')
+            ax.set_xlabel('Chi-square K')
+            ax.set_ylabel('Validation Macro F1')
+            ax.set_title('Direct SVM Chi-square K Tuning')
+            ax.grid(True, alpha=0.3)
+            fig.tight_layout()
+            path = os.path.join(output_dir, 'direct_svm_chi2_k_validation_macro_f1.png')
+            fig.savefig(path, dpi=160)
+            plt.close(fig)
+            saved_paths['direct_svm_chi2_k_validation_macro_f1.png'] = path
+
+        if direct_validation_results is not None and not direct_validation_results.empty:
+            heat_df = direct_validation_results.copy()
+            heat_df['K_label'] = heat_df['K'].astype(str)
+            heat_df = heat_df.sort_values('K', key=lambda s: s.map(_k_sort_key))
+            pivot = heat_df.pivot_table(
+                index='K_label',
+                columns='C',
+                values='Validation Macro F1',
+                aggfunc='max',
+            )
+            row_order = sorted(pivot.index, key=_k_sort_key)
+            pivot = pivot.loc[row_order]
+            fig, ax = plt.subplots(figsize=(max(7, 1.0 * len(pivot.columns)), max(4, 0.6 * len(pivot.index))))
+            im = ax.imshow(pivot.to_numpy(), aspect='auto', cmap='viridis')
+            ax.set_xticks(np.arange(len(pivot.columns)))
+            ax.set_xticklabels([str(c) for c in pivot.columns], rotation=45, ha='right')
+            ax.set_yticks(np.arange(len(pivot.index)))
+            ax.set_yticklabels(pivot.index)
+            ax.set_xlabel('SVM C')
+            ax.set_ylabel('Chi-square K')
+            ax.set_title('Direct SVM Validation Macro F1 Surface')
+            for i in range(pivot.shape[0]):
+                for j in range(pivot.shape[1]):
+                    value = pivot.iat[i, j]
+                    if pd.notna(value):
+                        ax.text(j, i, f'{value:.3f}', ha='center', va='center', color='white', fontsize=8)
+            fig.colorbar(im, ax=ax, label='Validation Macro F1')
+            fig.tight_layout()
+            path = os.path.join(output_dir, 'direct_svm_chi2_k_svm_c_validation_heatmap.png')
+            fig.savefig(path, dpi=160)
+            plt.close(fig)
+            saved_paths['direct_svm_chi2_k_svm_c_validation_heatmap.png'] = path
 
     if svm_results is not None:
         validation_results = svm_results.get('validation_results')
@@ -966,21 +1022,35 @@ def run_step3_experiment(
         svm_grid=svm_c_grid,
         evaluate_test=True,
     )
+
+    direct_svm_tuning = tune_chi2_k_with_direct_svm(
+        split_data['x_train'],
+        split_data['y_train'],
+        split_data['x_val'],
+        split_data['y_val'],
+        split_data['x_test'],
+        k_values=chi2_k_grid,
+        svm_grid=svm_c_grid,
+        representation=representation,
+    )
+    direct_chi2_data = direct_svm_tuning['chi2']
+    direct_svm_results = evaluate_svm_grid(
+        direct_chi2_data['x_train'],
+        split_data['y_train'],
+        direct_chi2_data['x_val'],
+        split_data['y_val'],
+        direct_chi2_data['x_test'],
+        split_data['y_test'],
+        svm_grid=svm_c_grid,
+        evaluate_test=True,
+    )
+
     baseline_results = {
         'Majority Class': evaluate_majority_baseline(
             split_data['y_train'],
             split_data['y_test'],
         ),
-        f'{representation.upper()} + SVM': evaluate_svm_grid(
-            chi2_data['x_train'],
-            split_data['y_train'],
-            chi2_data['x_val'],
-            split_data['y_val'],
-            chi2_data['x_test'],
-            split_data['y_test'],
-            svm_grid=svm_c_grid,
-            evaluate_test=True,
-        ),
+        f'{representation.upper()} + SVM': direct_svm_results,
     }
     model_comparison = build_model_comparison(svm_results, baseline_results)
 
@@ -1010,6 +1080,9 @@ def run_step3_experiment(
         'svm_c_grid': svm_c_grid,
         'best_chi2_k': 'all' if best_chi2_k is None else best_chi2_k,
         'best_svm_c': svm_results['best_params']['C'],
+        'best_direct_chi2_k': 'all' if direct_svm_tuning['best_k'] is None else direct_svm_tuning['best_k'],
+        'best_direct_svm_c': direct_svm_results['best_params']['C'],
+        'direct_svm_tuning': 'independent_validation_macro_f1',
         'baseline_models': list(baseline_results.keys()),
     }
     dataset_summary = load_jtype_verdict_summary(artifacts_folder=artifacts_folder) if include_dataset_summary else None
@@ -1024,6 +1097,7 @@ def run_step3_experiment(
         baseline_results=baseline_results,
         model_comparison=model_comparison,
         dataset_summary=dataset_summary,
+        direct_svm_tuning=direct_svm_tuning,
     )
 
     return {
@@ -1037,6 +1111,9 @@ def run_step3_experiment(
         'chi2_data': chi2_data,
         'mnir_data': mnir_data,
         'svm_results': svm_results,
+        'direct_svm_tuning': direct_svm_tuning,
+        'direct_chi2_data': direct_chi2_data,
+        'direct_svm_results': direct_svm_results,
         'baseline_results': baseline_results,
         'model_comparison': model_comparison,
     }
@@ -1071,11 +1148,14 @@ def run_step3_batch(
                         **kwargs,
                     )
                     metrics = result['svm_results']['test_metrics'].iloc[0].to_dict()
+                    direct_metrics = result['direct_svm_results']['test_metrics'].iloc[0].to_dict()
                     results.append({
                         **result['run_config'],
                         'output_dir': result['output_dir'],
                         'Test Accuracy': metrics.get('Test Accuracy'),
                         'Test Macro F1': metrics.get('Test Macro F1'),
+                        'Direct SVM Independent Accuracy': direct_metrics.get('Test Accuracy'),
+                        'Direct SVM Independent Macro F1': direct_metrics.get('Test Macro F1'),
                     })
                 except Exception as exc:
                     failures.append({
@@ -1221,6 +1301,7 @@ def run_direct_svm_experiment(
         baseline_results=baseline_results,
         model_comparison=model_comparison,
         dataset_summary=dataset_summary,
+        direct_svm_tuning=direct_svm_tuning,
     )
 
     return {
@@ -1272,6 +1353,193 @@ def run_direct_svm_batch(
                         'output_dir': result['output_dir'],
                         'Test Accuracy': metrics.get('Test Accuracy'),
                         'Test Macro F1': metrics.get('Test Macro F1'),
+                    })
+                except Exception as exc:
+                    failures.append({
+                        'dataset_name': dataset_name,
+                        'remove_leakage': remove_leakage,
+                        'representation': representation,
+                        'error': repr(exc),
+                    })
+
+    return {
+        'summary_df': pd.DataFrame(results),
+        'failures_df': pd.DataFrame(failures),
+    }
+
+
+def patch_step3_direct_svm_baseline(
+    dataset_name,
+    remove_leakage,
+    representation='bow',
+    run_mode='full',
+    run_tag='full_20260504_154912',
+    max_rows=None,
+    chi2_k_grid=None,
+    svm_c_grid=None,
+    train_size=0.70,
+    val_size=0.10,
+    test_size=0.20,
+    random_state=42,
+    features_folder='../artifacts/features/dtm',
+    artifacts_folder='../artifacts/reports',
+):
+    """
+    Recompute only the Direct SVM baseline and patch an existing Step 3 run.
+
+    Existing MNIR + SVM final_* files are read from the Step 3 run folder and
+    left untouched. This updates the baseline files, direct-SVM tuning files,
+    model_comparison.csv, model_comparison_test_metrics.png, and run_config.csv.
+    """
+    representation = _safe_slug(representation.lower().replace('-', '_'))
+    if representation == 'tf_idf':
+        representation = 'tfidf'
+    chi2_k_grid = chi2_k_grid or [1000, 3000, 5000, 10000]
+    svm_c_grid = svm_c_grid or [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0]
+
+    modeling_data = load_modeling_data(
+        dataset_name=dataset_name,
+        remove_leakage=remove_leakage,
+        representation=representation,
+        features_folder=features_folder,
+        artifacts_folder=artifacts_folder,
+    )
+    output_dir = os.path.join(
+        artifacts_folder,
+        modeling_data['dataset_slug'],
+        modeling_data['leakage_variant'],
+        representation,
+        'step3_runs',
+        run_tag,
+    )
+    if not os.path.isdir(output_dir):
+        raise FileNotFoundError(f"Existing Step 3 run folder not found: {output_dir}")
+
+    sampled_data = stratified_sample_modeling_data(
+        modeling_data['x'],
+        modeling_data['y'],
+        max_rows=max_rows,
+        random_state=random_state,
+    )
+    split_data = split_modeling_data(
+        sampled_data['x'],
+        sampled_data['y'],
+        train_size=train_size,
+        val_size=val_size,
+        test_size=test_size,
+        random_state=random_state,
+        stratify=True,
+    )
+
+    direct_svm_tuning = tune_chi2_k_with_direct_svm(
+        split_data['x_train'],
+        split_data['y_train'],
+        split_data['x_val'],
+        split_data['y_val'],
+        split_data['x_test'],
+        k_values=chi2_k_grid,
+        svm_grid=svm_c_grid,
+        representation=representation,
+    )
+    direct_chi2_data = direct_svm_tuning['chi2']
+    direct_svm_results = evaluate_svm_grid(
+        direct_chi2_data['x_train'],
+        split_data['y_train'],
+        direct_chi2_data['x_val'],
+        split_data['y_val'],
+        direct_chi2_data['x_test'],
+        split_data['y_test'],
+        svm_grid=svm_c_grid,
+        evaluate_test=True,
+    )
+    majority_results = evaluate_majority_baseline(split_data['y_train'], split_data['y_test'])
+
+    proposed_results = {
+        'test_metrics': pd.read_csv(os.path.join(output_dir, 'final_test_metrics.csv'), index_col=0),
+        'test_report': pd.read_csv(os.path.join(output_dir, 'final_test_report.csv'), index_col=0),
+        'confusion_matrix': pd.read_csv(os.path.join(output_dir, 'final_confusion_matrix.csv'), index_col=0),
+    }
+    validation_path = os.path.join(output_dir, 'final_svm_validation_grid.csv')
+    if os.path.exists(validation_path):
+        proposed_results['validation_results'] = pd.read_csv(validation_path, index_col=0)
+
+    baseline_results = {
+        'Majority Class': majority_results,
+        f'{representation.upper()} + SVM': direct_svm_results,
+    }
+    model_comparison = build_model_comparison(proposed_results, baseline_results)
+
+    # Preserve existing run_config columns and append patch metadata.
+    run_config_path = os.path.join(output_dir, 'run_config.csv')
+    if os.path.exists(run_config_path):
+        run_config_df = pd.read_csv(run_config_path)
+        run_config = run_config_df.iloc[0].to_dict() if not run_config_df.empty else {}
+    else:
+        run_config = {}
+    run_config.update(
+        {
+            'direct_svm_tuning': 'independent_validation_macro_f1',
+            'best_direct_chi2_k': 'all' if direct_svm_tuning['best_k'] is None else direct_svm_tuning['best_k'],
+            'best_direct_svm_c': direct_svm_results['best_params']['C'],
+            'direct_svm_patch_run_mode': run_mode,
+            'direct_svm_patch_run_tag': run_tag,
+            'direct_svm_patch_max_rows': max_rows,
+        }
+    )
+
+    saved_paths = save_step3_artifacts(
+        output_dir=output_dir,
+        baseline_results=baseline_results,
+        model_comparison=model_comparison,
+        run_config=run_config,
+        direct_svm_tuning=direct_svm_tuning,
+    )
+
+    return {
+        'run_config': run_config,
+        'output_dir': output_dir,
+        'saved_paths': saved_paths,
+        'direct_svm_tuning': direct_svm_tuning,
+        'direct_chi2_data': direct_chi2_data,
+        'direct_svm_results': direct_svm_results,
+        'baseline_results': baseline_results,
+        'model_comparison': model_comparison,
+    }
+
+
+def patch_step3_direct_svm_batch(
+    dataset_names,
+    remove_leakage_values,
+    representations,
+    run_mode='full',
+    run_tag='full_20260504_154912',
+    **kwargs,
+):
+    """Patch Direct SVM baselines for existing Step 3 run folders."""
+    results = []
+    failures = []
+    for dataset_name in dataset_names:
+        for remove_leakage in remove_leakage_values:
+            for representation in representations:
+                try:
+                    print(
+                        f"[Patch Direct SVM] {dataset_name} / "
+                        f"{'no_leakage' if remove_leakage else 'with_leakage'} / {representation}"
+                    )
+                    result = patch_step3_direct_svm_baseline(
+                        dataset_name=dataset_name,
+                        remove_leakage=remove_leakage,
+                        representation=representation,
+                        run_mode=run_mode,
+                        run_tag=run_tag,
+                        **kwargs,
+                    )
+                    metrics = result['direct_svm_results']['test_metrics'].iloc[0].to_dict()
+                    results.append({
+                        **result['run_config'],
+                        'output_dir': result['output_dir'],
+                        'Direct SVM Independent Accuracy': metrics.get('Test Accuracy'),
+                        'Direct SVM Independent Macro F1': metrics.get('Test Macro F1'),
                     })
                 except Exception as exc:
                     failures.append({
