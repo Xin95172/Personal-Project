@@ -104,14 +104,13 @@ async def handle_payload(payload: dict):
 
 # ── SockJS /info 握手 ──────────────────────────────────
 async def get_sockjs_info() -> bool:
-    """模擬瀏覽器行為：先打兩次 /info 再建立 WebSocket"""
     t = int(time.time() * 1000)
     try:
         async with httpx.AsyncClient(headers=REAL_HEADERS, timeout=10) as client:
-            r1 = await client.get(f"{BASE}/info")
+            r1 = await client.get(f"{BASE}/listen/info")        # ← 改這裡
             print(f"[info] status={r1.status_code}")
             await asyncio.sleep(0.5)
-            r2 = await client.get(f"{BASE}/info?t={t}")
+            r2 = await client.get(f"{BASE}/listen/info?t={t}")  # ← 改這裡
             print(f"[info?t] status={r2.status_code}")
         return r1.status_code == 200
     except Exception as e:
