@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, RGBColor
+from PIL import Image, ImageDraw, ImageFont
 
 from build_thesis_draft import (
     REPORTS,
@@ -16,9 +17,9 @@ from build_thesis_draft import (
     set_east_asia_font,
 )
 
-
-OUT = ROOT / "docs" / "論文第三章以後_修正版.docx"
+OUT = ROOT / "docs" / "論文第三章以後_修正版_含資料分布_口徑修正.docx"
 RUN_TAG = "full_20260504_154912"
+ASSET_DIR = ROOT / "docs" / "_thesis_distribution_assets"
 
 DATASET_LABELS = {
     "administrative_win_lose_mixed": "行政",
@@ -29,6 +30,9 @@ DATASET_LABELS = {
 
 FEATURE_LABELS = {"bow": "BoW", "tf": "TF", "tfidf": "TF-IDF"}
 DIRECT_MODELS = {"BOW + SVM", "TF + SVM", "TFIDF + SVM"}
+VERDICT_ORDER = ["Lose", "Mixed", "Win"]
+VERDICT_ZH = {"Lose": "敗訴", "Mixed": "部分勝訴", "Win": "勝訴"}
+JTYPE_ORDER = ["行政", "民事", "刑事", "刑事附帶民事"]
 
 
 def normalize_model(name):
@@ -39,7 +43,212 @@ def run_dir(dataset, leakage, feature):
     return REPORTS / dataset / leakage / feature / "step3_runs" / RUN_TAG
 
 
+def load_model_population():
+    labels = pd.read_csv(REPORTS / "judgment_labels.csv")
+    frames = []
+    for slug, jtype in [
+        ("administrative_win_lose_mixed", "ADMINISTRATIVE"),
+        ("civil_win_lose_mixed", "CIVIL"),
+        ("criminal_win_lose_mixed", "CRIMINAL"),
+        ("cwc_win_lose_mixed", "CWC"),
+    ]:
+        verdicts = pd.read_excel(REPORTS / slug / "no_leakage" / "verdict_results.xlsx")
+        merged = verdicts.merge(labels.drop(columns=["VERDICT"]), on="JID", how="left")
+        merged["資料集"] = DATASET_LABELS[slug]
+        merged["JTYPE_EXPECTED"] = jtype
+        frames.append(merged)
+    df = pd.concat(frames, ignore_index=True)
+    df["裁判結果"] = df["VERDICT"].map(VERDICT_ZH)
+    return df
+
+
+def add_year_bins(df):
+    bins = [79, 85, 89, 95, 101, 107, 113]
+    labels = ["80-85", "86-89", "90-95", "96-101", "102-107", "108-113"]
+    df = df.copy()
+    df["年度區間"] = pd.cut(df["JYEAR"], bins=bins, labels=labels)
+    return df
+
+
+def chart_font(size=24, bold=False):
+    candidates = [
+        Path("C:/Windows/Fonts/msjhbd.ttc" if bold else "C:/Windows/Fonts/msjh.ttc"),
+        Path("C:/Windows/Fonts/mingliu.ttc"),
+        Path("C:/Windows/Fonts/arial.ttf"),
+    ]
+    for p in candidates:
+        if p.exists():
+            return ImageFont.truetype(str(p), size=size)
+    return ImageFont.load_default()
+
+
+def draw_text_center(draw, xy, text, font, fill=(40, 40, 40)):
+    x, y = xy
+    box = draw.textbbox((0, 0), text, font=font)
+    draw.text((x - (box[2] - box[0]) / 2, y), text, font=font, fill=fill)
+
+
+def plot_stacked_bar(table, path, title, ylabel="案件數", normalize=False):
+    width, height = 1400, 820
+    margin_l, margin_r, margin_t, margin_b = 130, 70, 110, 150
+    plot_w = width - margin_l - margin_r
+    plot_h = height - margin_t - margin_b
+    colors = ["#d95f02", "#7570b3", "#1b9e77"]
+    im = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(im)
+    title_font = chart_font(34, bold=True)
+    label_font = chart_font(22)
+    tick_font = chart_font(20)
+    legend_font = chart_font(20)
+    draw_text_center(draw, (width / 2, 34), title, title_font)
+
+    values = table.astype(float)
+    totals = values.sum(axis=1)
+    ymax = 1.0 if normalize else max(float(totals.max()), 1.0)
+    ticks = [i / 5 for i in range(6)] if normalize else [ymax * i / 5 for i in range(6)]
+    for t in ticks:
+        y = margin_t + plot_h - (t / ymax) * plot_h
+        draw.line((margin_l, y, width - margin_r, y), fill=(220, 220, 220), width=1)
+        label = f"{t:.0%}" if normalize else f"{int(round(t))}"
+        draw.text((28, y - 12), label, font=tick_font, fill=(80, 80, 80))
+    draw.line((margin_l, margin_t, margin_l, margin_t + plot_h), fill=(90, 90, 90), width=2)
+    draw.line((margin_l, margin_t + plot_h, width - margin_r, margin_t + plot_h), fill=(90, 90, 90), width=2)
+    draw.text((24, margin_t + plot_h / 2 - 12), ylabel, font=label_font, fill=(70, 70, 70))
+
+    n = len(values)
+    step = plot_w / max(n, 1)
+    bar_w = step * 0.55
+    for idx, (name, row) in enumerate(values.iterrows()):
+        x0 = margin_l + idx * step + (step - bar_w) / 2
+        bottom = margin_t + plot_h
+        denom = totals.iloc[idx] if normalize and totals.iloc[idx] else 1
+        for j, col in enumerate(values.columns):
+            val = row[col] / denom if normalize else row[col]
+            h = (float(val) / ymax) * plot_h
+            draw.rectangle((x0, bottom - h, x0 + bar_w, bottom), fill=colors[j % len(colors)])
+            bottom -= h
+        draw_text_center(draw, (x0 + bar_w / 2, margin_t + plot_h + 20), str(name), tick_font)
+
+    lx = margin_l
+    ly = height - 62
+    for j, col in enumerate(values.columns):
+        draw.rectangle((lx, ly, lx + 22, ly + 22), fill=colors[j % len(colors)])
+        draw.text((lx + 30, ly - 2), str(col), font=legend_font, fill=(50, 50, 50))
+        lx += 170
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    im.save(path)
+
+
+def plot_line(table, path, title, ylabel="案件數"):
+    width, height = 1400, 820
+    margin_l, margin_r, margin_t, margin_b = 130, 80, 110, 160
+    plot_w = width - margin_l - margin_r
+    plot_h = height - margin_t - margin_b
+    colors = ["#4c78a8", "#f58518", "#54a24b", "#b279a2"]
+    im = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(im)
+    title_font = chart_font(34, bold=True)
+    label_font = chart_font(22)
+    tick_font = chart_font(20)
+    legend_font = chart_font(20)
+    draw_text_center(draw, (width / 2, 34), title, title_font)
+
+    values = table.astype(float)
+    ymax = max(float(values.max().max()), 1.0)
+    ticks = [ymax * i / 5 for i in range(6)]
+    for t in ticks:
+        y = margin_t + plot_h - (t / ymax) * plot_h
+        draw.line((margin_l, y, width - margin_r, y), fill=(220, 220, 220), width=1)
+        draw.text((28, y - 12), f"{int(round(t))}", font=tick_font, fill=(80, 80, 80))
+    draw.line((margin_l, margin_t, margin_l, margin_t + plot_h), fill=(90, 90, 90), width=2)
+    draw.line((margin_l, margin_t + plot_h, width - margin_r, margin_t + plot_h), fill=(90, 90, 90), width=2)
+    draw.text((24, margin_t + plot_h / 2 - 12), ylabel, font=label_font, fill=(70, 70, 70))
+
+    x_step = plot_w / max(len(values.index) - 1, 1)
+    for j, col in enumerate(values.columns):
+        pts = []
+        for i, (_, row) in enumerate(values.iterrows()):
+            x = margin_l + i * x_step
+            y = margin_t + plot_h - (float(row[col]) / ymax) * plot_h
+            pts.append((x, y))
+        if len(pts) > 1:
+            draw.line(pts, fill=colors[j % len(colors)], width=5)
+        for x, y in pts:
+            draw.ellipse((x - 6, y - 6, x + 6, y + 6), fill=colors[j % len(colors)])
+
+    for i, name in enumerate(values.index):
+        x = margin_l + i * x_step
+        draw_text_center(draw, (x, margin_t + plot_h + 20), str(name), tick_font)
+    lx = margin_l
+    ly = height - 62
+    for j, col in enumerate(values.columns):
+        draw.line((lx, ly + 10, lx + 38, ly + 10), fill=colors[j % len(colors)], width=5)
+        draw.text((lx + 48, ly - 2), str(col), font=legend_font, fill=(50, 50, 50))
+        lx += 230
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    im.save(path)
+
+
+def build_distribution_assets():
+    ASSET_DIR.mkdir(parents=True, exist_ok=True)
+    df = add_year_bins(load_model_population())
+
+    case_verdict = (
+        df.pivot_table(index="資料集", columns="裁判結果", values="JID", aggfunc="count", fill_value=0)
+        .reindex(JTYPE_ORDER)
+        .reindex(columns=["敗訴", "部分勝訴", "勝訴"], fill_value=0)
+    )
+    year_verdict = (
+        df.pivot_table(index="年度區間", columns="裁判結果", values="JID", aggfunc="count", fill_value=0, observed=False)
+        .reindex(columns=["敗訴", "部分勝訴", "勝訴"], fill_value=0)
+    )
+    year_verdict_ratio = year_verdict.div(year_verdict.sum(axis=1), axis=0).fillna(0)
+    year_jtype = (
+        df.pivot_table(index="年度區間", columns="資料集", values="JID", aggfunc="count", fill_value=0, observed=False)
+        .reindex(columns=JTYPE_ORDER, fill_value=0)
+    )
+    year_verdict_ratio_table = (year_verdict_ratio * 100).round(1).astype(str) + "%"
+
+    claim_cols = {
+        "claim_damages": "損害賠償",
+        "claim_injunction": "排除/防止侵害",
+        "claim_destroy_goods": "銷毀侵權物",
+        "claim_validity_review": "權利有效性爭議",
+        "claim_admin_cancellation": "行政撤銷/評定",
+    }
+    claim_rows = []
+    for dataset in JTYPE_ORDER:
+        sub = df[df["資料集"] == dataset]
+        row = {"資料集": dataset, "案件數": len(sub)}
+        for col, label in claim_cols.items():
+            row[label] = int(sub[col].fillna(False).astype(bool).sum())
+        claim_rows.append(row)
+    claim_table = pd.DataFrame(claim_rows)
+
+    case_verdict_path = ASSET_DIR / "case_type_by_verdict.png"
+    year_ratio_path = ASSET_DIR / "year_bin_verdict_ratio.png"
+    year_jtype_path = ASSET_DIR / "year_bin_case_type_counts.png"
+    plot_stacked_bar(case_verdict, case_verdict_path, "案件類型與裁判結果分布")
+    plot_stacked_bar(year_verdict_ratio, year_ratio_path, "年度區間與裁判結果比例", ylabel="比例", normalize=True)
+    plot_line(year_jtype, year_jtype_path, "年度區間與案件類型分布")
+
+    return {
+        "population": df,
+        "case_verdict": case_verdict.reset_index().rename(columns={"index": "資料集"}),
+        "year_verdict": year_verdict.reset_index().rename(columns={"index": "年度區間"}),
+        "year_verdict_ratio": year_verdict_ratio_table.reset_index().rename(columns={"index": "年度區間"}),
+        "year_jtype": year_jtype.reset_index().rename(columns={"index": "年度區間"}),
+        "claim_table": claim_table,
+        "case_verdict_path": case_verdict_path,
+        "year_ratio_path": year_ratio_path,
+        "year_jtype_path": year_jtype_path,
+    }
+
+
 def load_results():
+    dist = build_distribution_assets()
     rows = []
     for path in REPORTS.glob(f"*/*/*/step3_runs/{RUN_TAG}/model_comparison.csv"):
         feature = path.parents[2].name
@@ -70,18 +279,6 @@ def load_results():
                 }
             )
     long_df = pd.DataFrame(rows)
-
-    target_summary_path = next(REPORTS.rglob(f"step3_runs/{RUN_TAG}/valid_target_summary.csv"))
-    target_summary = pd.read_csv(target_summary_path).rename(columns={"JTYPE": "資料集", "All": "合計"})
-    target_summary["資料集"] = target_summary["資料集"].replace(
-        {
-            "ADMINISTRATIVE": "行政",
-            "CIVIL": "民事",
-            "CRIMINAL": "刑事",
-            "CWC": "刑事附帶民事",
-            "All": "合計",
-        }
-    )
 
     direct = long_df[long_df["模型群組"] == "Direct SVM"].copy()
     direct_best = direct.loc[direct.groupby("資料集")["Macro F1"].idxmax()].sort_values("資料集")
@@ -161,7 +358,7 @@ def load_results():
 
     return {
         "long": long_df,
-        "target_summary": target_summary,
+        "distribution": dist,
         "direct_best": direct_best,
         "feature_compare": feature_compare,
         "overall": overall,
@@ -215,7 +412,19 @@ def build():
         doc,
         "資料標籤呈現明顯不平衡，部分案件類型中 Lose 或 Mixed 為主要類別，而 Win 類別樣本數較少。因此，本文除報告 Accuracy 外，也以 Macro F1 作為主要評估指標，以避免模型僅因預測多數類別而獲得表面上較高的準確率。"
     )
-    add_table(doc, data["target_summary"], "表 1 資料集與裁判結果標籤分布")
+    add_para(
+        doc,
+        "為避免資料描述只停留在總樣本數，本文進一步從案件類型、年度區間、裁判結果與請求類型等不同維度檢視資料組成。以下圖表皆以最終進入模型實驗的四類 Win/Lose/Mixed 資料為基礎。"
+    )
+    add_table(doc, data["distribution"]["case_verdict"], "表 1 案件類型與裁判結果交叉分布")
+    add_figure(doc, data["distribution"]["case_verdict_path"], "圖 1 案件類型與裁判結果分布", width=5.8)
+    add_table(doc, data["distribution"]["year_verdict_ratio"], "表 2 年度區間與裁判結果比例")
+    add_figure(doc, data["distribution"]["year_ratio_path"], "圖 2 年度區間與裁判結果比例", width=5.8)
+    doc.add_page_break()
+    add_table(doc, data["distribution"]["year_jtype"], "表 3 年度區間與案件類型分布")
+    add_figure(doc, data["distribution"]["year_jtype_path"], "圖 3 年度區間與案件類型分布", width=5.8)
+    doc.add_page_break()
+    add_table(doc, data["distribution"]["claim_table"], "表 4 案件類型與主要請求/爭點標記分布")
 
     add_heading_numbered(doc, "3.3 特徵表示與卡方選擇", level=2)
     add_para(
@@ -250,7 +459,7 @@ def build():
     add_table(
         doc,
         data["overall"],
-        "表 2 各資料集 Direct SVM 最佳結果與 Baseline 比較",
+        "表 5 各資料集 Direct SVM 最佳結果與 Baseline 比較",
         percent_cols=["Accuracy", "Macro F1", "MNIR+SVM Macro F1", "Majority Macro F1", "Direct - MNIR"],
     )
     add_para(
@@ -259,7 +468,7 @@ def build():
     )
 
     add_heading_numbered(doc, "4.3 Feature Representation Comparison", level=2)
-    add_table(doc, data["feature_compare"], "表 3 Direct SVM 下 BoW、TF、TF-IDF 之最佳 Macro F1", percent_cols=["BoW", "TF", "TF-IDF"])
+    add_table(doc, data["feature_compare"], "表 6 Direct SVM 下 BoW、TF、TF-IDF 之最佳 Macro F1", percent_cols=["BoW", "TF", "TF-IDF"])
     add_para(
         doc,
         "三種表示法沒有單一方法在所有案件類型皆勝出。刑事資料集以 TF 表現較佳，民事資料集以 TF-IDF 較佳，行政與刑事附帶民事則以 BoW 較佳。此結果說明法律判決文本的有效特徵形式會受案件類型與詞彙分布影響，不能假設 TF-IDF 或任一表示法必然最佳。"
@@ -269,7 +478,7 @@ def build():
     add_table(
         doc,
         data["baseline_compare"],
-        "表 4 Direct SVM 與 MNIR+SVM 於各資料集之最佳 Macro F1 比較",
+        "表 7 Direct SVM 與 MNIR+SVM 於各資料集之最佳 Macro F1 比較",
         percent_cols=["Direct SVM Macro F1", "MNIR+SVM Macro F1", "差異"],
     )
     add_para(
@@ -285,13 +494,13 @@ def build():
     add_table(
         doc,
         data["plateau_table"],
-        "表 5 最佳整體設定之 Direct SVM 參數選擇摘要",
+        "表 8 最佳整體設定之 Direct SVM 參數選擇摘要",
         percent_cols=["Validation Macro F1", "與最佳差距"],
     )
     add_figure(
         doc,
         data["best_dir"] / "direct_svm_chi2_k_svm_c_validation_heatmap.png",
-        "圖 1 Direct SVM K × C Validation Macro F1 參數表面",
+        "圖 4 Direct SVM K × C Validation Macro F1 參數表面",
         width=5.8,
     )
 
@@ -299,7 +508,7 @@ def build():
     add_table(
         doc,
         data["leakage_compare"],
-        "表 6 Direct SVM 下 no-leakage 與 with-leakage 之最佳 Macro F1",
+        "表 9 Direct SVM 下 no-leakage 與 with-leakage 之最佳 Macro F1",
         percent_cols=["no leakage", "with leakage", "no - with"],
     )
     add_para(
@@ -312,11 +521,11 @@ def build():
         doc,
         "最佳整體模型雖然取得較高 Accuracy 與 Macro F1，但混淆矩陣與類別報告顯示 Win 類別仍是主要困難來源。此現象與資料不平衡一致，表示模型對少數類別的召回能力不足，未來可進一步加入 class weighting、resampling 或針對少數類別的錯誤案例分析。"
     )
-    add_table(doc, data["confusion_matrix"], "表 7 最佳整體 Direct SVM 模型之測試集混淆矩陣")
+    add_table(doc, data["confusion_matrix"], "表 10 最佳整體 Direct SVM 模型之測試集混淆矩陣")
     add_table(
         doc,
         data["class_report"],
-        "表 8 最佳整體 Direct SVM 模型之分類報告",
+        "表 11 最佳整體 Direct SVM 模型之分類報告",
         percent_cols=["precision", "recall", "f1-score"],
     )
 

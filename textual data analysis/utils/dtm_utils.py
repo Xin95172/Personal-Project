@@ -134,10 +134,20 @@ def get_dtm(
     output_path.mkdir(parents=True, exist_ok=True)
     if model == 'BoW':
         sp.save_npz(str(output_path / 'dtm_csr_BoW.npz'), dtm_sparse)
+        vocab_stem = 'vocab_BoW'
     elif model == 'TF':
         sp.save_npz(str(output_path / 'dtm_csr_TF.npz'), dtm_sparse)
+        vocab_stem = 'vocab_TF'
     elif model == 'TF-IDF':
         sp.save_npz(str(output_path / 'dtm_csr_TF_IDF.npz'), dtm_sparse)
+        vocab_stem = 'vocab_TF_IDF'
+
+    np.save(str(output_path / f'{vocab_stem}.npy'), vocab)
+    pd.Series(vocab, name='term').to_csv(
+        output_path / f'{vocab_stem}.csv',
+        index=False,
+        encoding='utf-8-sig',
+    )
 
     doc_ids = df.index.to_numpy()
 
