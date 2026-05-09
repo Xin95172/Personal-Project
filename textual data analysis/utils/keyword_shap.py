@@ -751,7 +751,22 @@ def keyword_linear_shap_direct_svm(
         artifacts_folder=artifacts_folder,
     )
     if len(vocab) != modeling_data["x"].shape[1]:
-        raise ValueError(f"Vocabulary length ({len(vocab)}) does not match DTM columns ({modeling_data['x'].shape[1]}).")
+        print(
+            "Vocabulary length does not match saved DTM columns; "
+            "rebuilding DTM and vocabulary from word_seg.xlsx for this explanation only. "
+            f"vocab={len(vocab)}, saved_dtm_columns={modeling_data['x'].shape[1]}"
+        )
+        x_rebuilt, y_rebuilt, vocab = rebuild_dtm_from_word_seg(
+            dataset_name,
+            remove_leakage,
+            representation,
+            artifacts_folder=artifacts_folder,
+        )
+        modeling_data = {
+            **modeling_data,
+            "x": x_rebuilt,
+            "y": y_rebuilt,
+        }
 
     sampled = stratified_sample_modeling_data(
         modeling_data["x"],

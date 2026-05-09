@@ -11,3 +11,9 @@ from .text_utils import normalize_zh, start_for_special_cases, extract_fact, rem
 from .tokenize_utils import convert_dict_to_vocab_list, word_seg
 from .dtm_utils import custom_tokenizer, get_dtm, get_verdict_results
 from .role_extractor import extract_roles, extract_role_features, is_company, is_government
+from .plot_utils import (
+    DEFAULT_DIRECT_SVM_HEATMAP_CONFIGS,
+    configure_chinese_matplotlib_fonts,
+    load_direct_svm_validation_grids,
+    plot_direct_svm_k_c_validation_heatmap,
+)
