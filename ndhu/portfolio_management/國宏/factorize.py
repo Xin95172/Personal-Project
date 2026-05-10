@@ -64,17 +64,66 @@ def fetch_factors(ticker_symbol: str) -> dict | None:
     }
 
 
-def fetch_factors_batch(tickers: list[str]) -> pd.DataFrame:
+import os
+
+def fetch_factors_batch(tickers: list[str], cache_path: str = "factors_cache.pkl", expire_days: int = 7) -> pd.DataFrame:
     """
     批次抓取多檔 ticker 的因子資料，回傳 DataFrame。
+    具備本地快取功能，若資料在 expire_days 內更新，則優先使用快取。
     """
-    rows = []
-    for t in tickers:
-        result = fetch_factors(t)
-        if result is not None:
-            rows.append(result)
-        time.sleep(0.5)
-    return pd.DataFrame(rows).set_index("ticker")
+    cached_df = pd.DataFrame()
+    if os.path.exists(cache_path):
+        try:
+            cached_df = pd.read_pickle(cache_path)
+            print(f"發現基本面快取 (大小: {cached_df.shape})。")
+        except Exception as e:
+            pass
+
+    now = pd.Timestamp.now()
+    needs_fetch = []
+    
+    if not cached_df.empty:
+        for t in tickers:
+            if t in cached_df.index and 'last_updated' in cached_df.columns:
+                last_upd = pd.to_datetime(cached_df.loc[t, 'last_updated'])
+                if (now - last_upd).days < expire_days:
+                    continue
+            needs_fetch.append(t)
+    else:
+        needs_fetch = tickers
+
+    if needs_fetch:
+        print(f"需要抓取 {len(needs_fetch)} 檔標的的基本面資料...")
+        new_rows = []
+        for i, t in enumerate(needs_fetch):
+            if i % 10 == 0:
+                print(f"  - 抓取進度: {i+1} / {len(needs_fetch)}...")
+            result = fetch_factors(t)
+            if result is not None:
+                result['last_updated'] = now
+                new_rows.append(result)
+            time.sleep(0.5) # 避免 API 限制
+            
+        if new_rows:
+            new_df = pd.DataFrame(new_rows).set_index("ticker")
+            if not cached_df.empty:
+                # 剔除要覆蓋的資料
+                keep_idx = [idx for idx in cached_df.index if idx not in new_df.index]
+                cached_df = pd.concat([cached_df.loc[keep_idx], new_df])
+            else:
+                cached_df = new_df
+                
+            try:
+                cached_df.to_pickle(cache_path)
+                print("已更新基本面快取。")
+            except Exception as e:
+                print(f"寫入基本面快取失敗: {e}")
+
+    if cached_df.empty:
+        return pd.DataFrame()
+        
+    avail = [t for t in tickers if t in cached_df.index]
+    return cached_df.loc[avail].drop(columns=['last_updated'], errors='ignore')
 
 
 # ────────────────────────────────────────
