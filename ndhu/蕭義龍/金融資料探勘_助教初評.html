@@ -1,0 +1,4537 @@
+<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'>
+<title>金融資料探勘助教初評</title>
+<style>body{font-family:'Microsoft JhengHei',Arial,sans-serif;margin:28px;line-height:1.5;color:#202124}table{border-collapse:collapse;width:100%;margin:16px 0 28px}th{background:#1f4e78;color:#fff}th,td{border:1px solid #d9e2f3;padding:8px;vertical-align:top}tr:nth-child(even){background:#f7fbff}.student{border:1px solid #d9e2f3;padding:14px;margin:14px 0 24px;border-radius:6px}.student h3{margin:0 0 8px}.meta{color:#5f6368}.deduct{color:#8a1f11}</style>
+</head><body>
+<h1>金融資料探勘助教初評</h1>
+<p class='meta'>依 PDF 可辨識規範與 harness/可重現性做初評；低分與臨界分數建議人工複核。</p>
+<h2>總覽</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>作業</th>
+      <th>份數</th>
+      <th>平均分</th>
+      <th>最低分</th>
+      <th>最高分</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>HW1</td>
+      <td>27</td>
+      <td>82.9</td>
+      <td>30</td>
+      <td>99</td>
+    </tr>
+    <tr>
+      <td>Midterm</td>
+      <td>28</td>
+      <td>87.7</td>
+      <td>67</td>
+      <td>97</td>
+    </tr>
+  </tbody>
+</table>
+<h2>評分規準</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>作業</th>
+      <th>維度</th>
+      <th>配分</th>
+      <th>檢查標準</th>
+      <th>給學生的說明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>HW1</td>
+      <td>完整性</td>
+      <td>25</td>
+      <td>Index、Process、Report、AIPrompt 是否齊全，檔名是否可對應學號與年份。</td>
+      <td>缺檔會直接影響後續資料、程式與報告評分。</td>
+    </tr>
+    <tr>
+      <td>HW1</td>
+      <td>資料</td>
+      <td>20</td>
+      <td>Index 是否可讀，是否包含日期、來源檔案、S0/收盤價、Contract、ContractExpiryDate、Maturity、Rf 等資料，列數是否合理。</td>
+      <td>欄名可以不同，例如 Date/年月日、S0/收盤價、Rf/RiskFreeRate；重點是資料內容正確且可辨識。</td>
+    </tr>
+    <tr>
+      <td>HW1</td>
+      <td>Harness</td>
+      <td>25</td>
+      <td>是否有可重跑流程、讀檔、批次處理、輸出結果與清楚流程；相對路徑或固定檔名可接受。</td>
+      <td>這是避免只把資料丟給 AI 的主要標準；若 notebook 像多段 AI/教學片段堆疊，未整理成自己理解的一次性流程，會扣分。</td>
+    </tr>
+    <tr>
+      <td>HW1</td>
+      <td>報告</td>
+      <td>20</td>
+      <td>報告是否說明資料來源、欄位定義、處理步驟、結果與分析。</td>
+      <td>重點是學生是否能解釋自己做了什麼，而非只交成果檔。</td>
+    </tr>
+    <tr>
+      <td>HW1</td>
+      <td>AI Prompt</td>
+      <td>10</td>
+      <td>是否記錄 Task、Prompt、調整、最終 Prompt 與 Analysis。</td>
+      <td>評估學生是否有理解、修正與驗證 AI 產出。</td>
+    </tr>
+    <tr>
+      <td>Midterm</td>
+      <td>個人 IVData</td>
+      <td>12</td>
+      <td>IVData 是否可讀，是否包含 IV 與 PCR/Put-Call 資訊。</td>
+      <td>期中個人部分 40%；欄名可用中英文或縮寫。</td>
+    </tr>
+    <tr>
+      <td>Midterm</td>
+      <td>個人 Process</td>
+      <td>12</td>
+      <td>程式是否能重現 IV/PCR 計算流程，而不是只交 AI 生成結果。</td>
+      <td>若流程片段化、像逐段貼 AI/教學範例，會扣可重現性分數。</td>
+    </tr>
+    <tr>
+      <td>Midterm</td>
+      <td>個人報告</td>
+      <td>10</td>
+      <td>是否解釋 IV、PCR、資料處理、結果與金融意義。</td>
+      <td>評估個人理解與表達。</td>
+    </tr>
+    <tr>
+      <td>Midterm</td>
+      <td>個人 AI Prompt</td>
+      <td>6</td>
+      <td>是否提供 AI 使用紀錄與修正過程。</td>
+      <td>反映負責任使用 AI 的程度。</td>
+    </tr>
+    <tr>
+      <td>Midterm</td>
+      <td>小組 IV/PCR 整合</td>
+      <td>15</td>
+      <td>是否有小組整合資料。</td>
+      <td>同組有人上傳即可計入同組成員，深層資料夾也會遞迴檢查。</td>
+    </tr>
+    <tr>
+      <td>Midterm</td>
+      <td>小組書面報告與 insight</td>
+      <td>27</td>
+      <td>書面報告是否有方法、圖表、結果解釋與金融 insight。</td>
+      <td>小組比重 60%，insight 會明確納入書面報告評分。</td>
+    </tr>
+    <tr>
+      <td>Midterm</td>
+      <td>小組簡報</td>
+      <td>12</td>
+      <td>簡報是否可讀且能呈現結論。</td>
+      <td>同組有人上傳即可計入同組成員。</td>
+    </tr>
+    <tr>
+      <td>Midterm</td>
+      <td>小組摘要/整合說明</td>
+      <td>6</td>
+      <td>是否有摘要或整合說明。</td>
+      <td>看是否說明整合範圍與結論。</td>
+    </tr>
+  </tbody>
+</table>
+<h2>HW1 初評</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>學號</th>
+      <th>總分</th>
+      <th>分數帶</th>
+      <th>Index 資料</th>
+      <th>Process 程式</th>
+      <th>Report 報告</th>
+      <th>AI Prompt</th>
+      <th>格式命名</th>
+      <th>重點說明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>411042033</td>
+      <td>47</td>
+      <td>高風險/建議人工複核</td>
+      <td>20</td>
+      <td>0</td>
+      <td>24</td>
+      <td>0</td>
+      <td>3</td>
+      <td>缺少 Process 程式；程式內容偏少或無法讀取；未明顯看到有使用資料處理套件或表格讀取；未明顯看到有從檔案讀取資料；未明顯看到有輸出處理後資料或圖表；缺少 AI Prompt 紀錄；Report 檔名未完全符合規範或不易辨識；缺少檔案：Process, AI Prompt</td>
+    </tr>
+    <tr>
+      <td>411111211</td>
+      <td>84</td>
+      <td>良好</td>
+      <td>20</td>
+      <td>15</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411111220</td>
+      <td>91</td>
+      <td>優良</td>
+      <td>20</td>
+      <td>22</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>未明顯看到有使用資料處理套件或表格讀取；未明顯看到有函式化整理</td>
+    </tr>
+    <tr>
+      <td>411121265</td>
+      <td>83</td>
+      <td>良好</td>
+      <td>20</td>
+      <td>15</td>
+      <td>24</td>
+      <td>15</td>
+      <td>9</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程；Report 檔名未完全符合規範或不易辨識</td>
+    </tr>
+    <tr>
+      <td>411121267</td>
+      <td>84</td>
+      <td>良好</td>
+      <td>20</td>
+      <td>15</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411136028</td>
+      <td>65</td>
+      <td>需複核</td>
+      <td>20</td>
+      <td>0</td>
+      <td>24</td>
+      <td>15</td>
+      <td>6</td>
+      <td>缺少 Process 程式；程式內容偏少或無法讀取；未明顯看到有使用資料處理套件或表格讀取；未明顯看到有從檔案讀取資料；未明顯看到有輸出處理後資料或圖表；缺少檔案：Process</td>
+    </tr>
+    <tr>
+      <td>411236002</td>
+      <td>82</td>
+      <td>良好</td>
+      <td>20</td>
+      <td>15</td>
+      <td>22</td>
+      <td>15</td>
+      <td>10</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411236005</td>
+      <td>99</td>
+      <td>優良</td>
+      <td>20</td>
+      <td>30</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>411236006</td>
+      <td>99</td>
+      <td>優良</td>
+      <td>20</td>
+      <td>30</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>411236022</td>
+      <td>99</td>
+      <td>優良</td>
+      <td>20</td>
+      <td>30</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>411236023</td>
+      <td>30</td>
+      <td>高風險/建議人工複核</td>
+      <td>20</td>
+      <td>0</td>
+      <td>0</td>
+      <td>6</td>
+      <td>4</td>
+      <td>缺少 Process 程式；程式內容偏少或無法讀取；未明顯看到有使用資料處理套件或表格讀取；未明顯看到有從檔案讀取資料；未明顯看到有輸出處理後資料或圖表；缺少報告檔；AI Prompt 紀錄不完整；缺少檔案：Process, Report</td>
+    </tr>
+    <tr>
+      <td>411236057</td>
+      <td>72</td>
+      <td>尚可</td>
+      <td>20</td>
+      <td>22</td>
+      <td>9</td>
+      <td>11</td>
+      <td>10</td>
+      <td>未明顯看到有批次處理/迴圈流程；未明顯看到有函式化整理；報告無法抽取足夠文字，需人工確認內容；報告未明顯涵蓋核心欄位、方法或分析關鍵字；AI Prompt 紀錄不完整</td>
+    </tr>
+    <tr>
+      <td>411336001</td>
+      <td>84</td>
+      <td>良好</td>
+      <td>20</td>
+      <td>15</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411336004</td>
+      <td>75</td>
+      <td>尚可</td>
+      <td>20</td>
+      <td>15</td>
+      <td>15</td>
+      <td>15</td>
+      <td>10</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程；報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+    </tr>
+    <tr>
+      <td>411336011</td>
+      <td>83</td>
+      <td>良好</td>
+      <td>20</td>
+      <td>15</td>
+      <td>24</td>
+      <td>15</td>
+      <td>9</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程；AIPrompt 檔名未完全符合規範或不易辨識</td>
+    </tr>
+    <tr>
+      <td>411336017</td>
+      <td>93</td>
+      <td>優良</td>
+      <td>20</td>
+      <td>24</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>程式內容偏少或無法讀取</td>
+    </tr>
+    <tr>
+      <td>411336018</td>
+      <td>84</td>
+      <td>良好</td>
+      <td>20</td>
+      <td>15</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411336019</td>
+      <td>84</td>
+      <td>良好</td>
+      <td>20</td>
+      <td>15</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411336020</td>
+      <td>84</td>
+      <td>良好</td>
+      <td>20</td>
+      <td>15</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411336021</td>
+      <td>84</td>
+      <td>良好</td>
+      <td>20</td>
+      <td>15</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411336035</td>
+      <td>83</td>
+      <td>良好</td>
+      <td>19</td>
+      <td>15</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>Index 缺必要資料欄位：Rf；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411336039</td>
+      <td>84</td>
+      <td>良好</td>
+      <td>20</td>
+      <td>15</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411336043</td>
+      <td>99</td>
+      <td>優良</td>
+      <td>20</td>
+      <td>30</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>411336045</td>
+      <td>91</td>
+      <td>優良</td>
+      <td>20</td>
+      <td>22</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>未明顯看到有批次處理/迴圈流程；Rf/無風險利率疑似直接使用固定數值，未依日期、月份或年度變動處理</td>
+    </tr>
+    <tr>
+      <td>411336054</td>
+      <td>95</td>
+      <td>優良</td>
+      <td>20</td>
+      <td>26</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>未明顯看到有批次處理/迴圈流程</td>
+    </tr>
+    <tr>
+      <td>411336062</td>
+      <td>95</td>
+      <td>優良</td>
+      <td>20</td>
+      <td>26</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>未明顯看到有批次處理/迴圈流程</td>
+    </tr>
+    <tr>
+      <td>411336064</td>
+      <td>84</td>
+      <td>良好</td>
+      <td>20</td>
+      <td>15</td>
+      <td>24</td>
+      <td>15</td>
+      <td>10</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+  </tbody>
+</table>
+<h2>期中初評</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>學號</th>
+      <th>總分</th>
+      <th>分數帶</th>
+      <th>個人 IVData</th>
+      <th>個人 Process</th>
+      <th>個人報告</th>
+      <th>AI Prompt</th>
+      <th>小組部分</th>
+      <th>重點說明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>411042033</td>
+      <td>96</td>
+      <td>優良</td>
+      <td>11</td>
+      <td>12</td>
+      <td>9</td>
+      <td>6</td>
+      <td>58</td>
+      <td>報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+    </tr>
+    <tr>
+      <td>411111211</td>
+      <td>91</td>
+      <td>優良</td>
+      <td>11</td>
+      <td>6</td>
+      <td>9</td>
+      <td>6</td>
+      <td>59</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411111220</td>
+      <td>86</td>
+      <td>良好</td>
+      <td>8</td>
+      <td>12</td>
+      <td>9</td>
+      <td>0</td>
+      <td>57</td>
+      <td>IVData 未明顯看到 IV 欄位；缺少 AI Prompt 紀錄；報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+    </tr>
+    <tr>
+      <td>411121265</td>
+      <td>85</td>
+      <td>良好</td>
+      <td>5</td>
+      <td>6</td>
+      <td>9</td>
+      <td>6</td>
+      <td>59</td>
+      <td>IVData 未明顯看到 IV 欄位；IVData 未明顯看到 PCR/Put-Call 欄位；程式未明顯處理 PCR；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411121267</td>
+      <td>90</td>
+      <td>優良</td>
+      <td>11</td>
+      <td>6</td>
+      <td>9</td>
+      <td>5</td>
+      <td>59</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程；AI Prompt 紀錄不完整</td>
+    </tr>
+    <tr>
+      <td>411136025</td>
+      <td>79</td>
+      <td>尚可</td>
+      <td>11</td>
+      <td>12</td>
+      <td>9</td>
+      <td>2</td>
+      <td>45</td>
+      <td>AI Prompt 紀錄不完整；缺少報告檔；報告未明顯涵蓋核心欄位、方法或分析關鍵字；小組附件缺：投影片</td>
+    </tr>
+    <tr>
+      <td>411136028</td>
+      <td>97</td>
+      <td>優良</td>
+      <td>11</td>
+      <td>12</td>
+      <td>9</td>
+      <td>6</td>
+      <td>59</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>411236002</td>
+      <td>79</td>
+      <td>尚可</td>
+      <td>2</td>
+      <td>6</td>
+      <td>9</td>
+      <td>5</td>
+      <td>57</td>
+      <td>IVData 無法正常讀取：error: ValueError；IVData 未明顯看到 IV 欄位；IVData 未明顯看到 PCR/Put-Call 欄位；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程；AI Prompt 紀錄不完整；報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+    </tr>
+    <tr>
+      <td>411236005</td>
+      <td>83</td>
+      <td>良好</td>
+      <td>8</td>
+      <td>10</td>
+      <td>4</td>
+      <td>6</td>
+      <td>55</td>
+      <td>IVData 未明顯看到 PCR/Put-Call 欄位；程式未明顯處理 PCR；Rf/無風險利率疑似直接使用固定數值，未依日期、月份或年度變動處理；報告未明顯涵蓋核心欄位、方法或分析關鍵字；報告無法抽取足夠文字，需人工確認內容；報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+    </tr>
+    <tr>
+      <td>411236006</td>
+      <td>95</td>
+      <td>優良</td>
+      <td>11</td>
+      <td>12</td>
+      <td>9</td>
+      <td>6</td>
+      <td>57</td>
+      <td>報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+    </tr>
+    <tr>
+      <td>411236022</td>
+      <td>91</td>
+      <td>優良</td>
+      <td>11</td>
+      <td>11</td>
+      <td>8</td>
+      <td>6</td>
+      <td>55</td>
+      <td>未明顯看到有批次處理/迴圈流程；報告文字內容偏少；報告無法抽取足夠文字，需人工確認內容；報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+    </tr>
+    <tr>
+      <td>411236023</td>
+      <td>67</td>
+      <td>需複核</td>
+      <td>2</td>
+      <td>4</td>
+      <td>3</td>
+      <td>3</td>
+      <td>55</td>
+      <td>IVData 無法正常讀取：zip-no-table；IVData 未明顯看到 IV 欄位；IVData 未明顯看到 PCR/Put-Call 欄位；程式未明顯處理 PCR；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程；Rf/無風險利率疑似直接使用固定數值，未依日期、月份或年度變動處理；報告文字內容偏少；報告未明顯涵蓋核心欄位、方法或分析關鍵字；AI Prompt 紀錄不完整；報告無法抽取足夠文字，需人工確認內容；報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+    </tr>
+    <tr>
+      <td>411236052</td>
+      <td>87</td>
+      <td>良好</td>
+      <td>9</td>
+      <td>4</td>
+      <td>9</td>
+      <td>6</td>
+      <td>59</td>
+      <td>IVData 未明顯看到 PCR/Put-Call 欄位；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程；Rf/無風險利率疑似直接使用固定數值，未依日期、月份或年度變動處理</td>
+    </tr>
+    <tr>
+      <td>411236057</td>
+      <td>89</td>
+      <td>良好</td>
+      <td>6</td>
+      <td>9</td>
+      <td>9</td>
+      <td>6</td>
+      <td>59</td>
+      <td>IVData 未明顯看到 IV 欄位；IVData 未明顯看到 PCR/Put-Call 欄位；程式內容偏少或無法讀取；Rf/無風險利率疑似直接使用固定數值，未依日期、月份或年度變動處理</td>
+    </tr>
+    <tr>
+      <td>411336001</td>
+      <td>92</td>
+      <td>優良</td>
+      <td>12</td>
+      <td>6</td>
+      <td>9</td>
+      <td>6</td>
+      <td>59</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411336004</td>
+      <td>92</td>
+      <td>優良</td>
+      <td>12</td>
+      <td>6</td>
+      <td>9</td>
+      <td>6</td>
+      <td>59</td>
+      <td>程式未明顯處理 PCR；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411336011</td>
+      <td>92</td>
+      <td>優良</td>
+      <td>12</td>
+      <td>6</td>
+      <td>9</td>
+      <td>6</td>
+      <td>59</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411336017</td>
+      <td>91</td>
+      <td>優良</td>
+      <td>11</td>
+      <td>6</td>
+      <td>9</td>
+      <td>6</td>
+      <td>59</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411336018</td>
+      <td>91</td>
+      <td>優良</td>
+      <td>11</td>
+      <td>6</td>
+      <td>9</td>
+      <td>6</td>
+      <td>59</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411336020</td>
+      <td>83</td>
+      <td>良好</td>
+      <td>4</td>
+      <td>6</td>
+      <td>8</td>
+      <td>6</td>
+      <td>59</td>
+      <td>IVData 未明顯看到 IV 欄位；IVData 未明顯看到 PCR/Put-Call 欄位；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程；報告文字內容偏少</td>
+    </tr>
+    <tr>
+      <td>411336021</td>
+      <td>91</td>
+      <td>優良</td>
+      <td>11</td>
+      <td>6</td>
+      <td>9</td>
+      <td>6</td>
+      <td>59</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+    <tr>
+      <td>411336035</td>
+      <td>79</td>
+      <td>尚可</td>
+      <td>11</td>
+      <td>0</td>
+      <td>9</td>
+      <td>0</td>
+      <td>59</td>
+      <td>缺少 Process 程式；程式內容偏少或無法讀取；未明顯看到有使用資料處理套件或表格讀取；未明顯看到有從檔案讀取資料；未明顯看到有輸出處理後資料或圖表；缺少 AI Prompt 紀錄</td>
+    </tr>
+    <tr>
+      <td>411336039</td>
+      <td>89</td>
+      <td>良好</td>
+      <td>11</td>
+      <td>4</td>
+      <td>9</td>
+      <td>6</td>
+      <td>59</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程；Rf/無風險利率疑似直接使用固定數值，未依日期、月份或年度變動處理</td>
+    </tr>
+    <tr>
+      <td>411336043</td>
+      <td>80</td>
+      <td>良好</td>
+      <td>6</td>
+      <td>6</td>
+      <td>9</td>
+      <td>6</td>
+      <td>53</td>
+      <td>IVData 未明顯看到 IV 欄位；IVData 未明顯看到 PCR/Put-Call 欄位；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程；缺少報告檔；小組附件缺：摘要</td>
+    </tr>
+    <tr>
+      <td>411336045</td>
+      <td>84</td>
+      <td>良好</td>
+      <td>6</td>
+      <td>10</td>
+      <td>9</td>
+      <td>6</td>
+      <td>53</td>
+      <td>IVData 未明顯看到 IV 欄位；IVData 未明顯看到 PCR/Put-Call 欄位；未明顯看到有輸出處理後資料或圖表；未明顯看到有批次處理/迴圈流程；缺少報告檔；小組附件缺：摘要</td>
+    </tr>
+    <tr>
+      <td>411336054</td>
+      <td>95</td>
+      <td>優良</td>
+      <td>11</td>
+      <td>10</td>
+      <td>9</td>
+      <td>6</td>
+      <td>59</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式未明顯處理 PCR</td>
+    </tr>
+    <tr>
+      <td>411336062</td>
+      <td>91</td>
+      <td>優良</td>
+      <td>10</td>
+      <td>10</td>
+      <td>9</td>
+      <td>3</td>
+      <td>59</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式未明顯處理 PCR；AI Prompt 紀錄不完整</td>
+    </tr>
+    <tr>
+      <td>411336064</td>
+      <td>91</td>
+      <td>優良</td>
+      <td>11</td>
+      <td>6</td>
+      <td>9</td>
+      <td>6</td>
+      <td>59</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+    </tr>
+  </tbody>
+</table>
+<h2>每位學生檔案分數明細</h2>
+<section class='student'><h3>411042033 陳　樸</h3>
+<h4>HW1: 47 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411042033_2024.xlsx</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>未提交/未辨識</td>
+      <td>0</td>
+      <td>30</td>
+      <td>缺少 Process 程式；程式內容偏少或無法讀取；未明顯看到有使用資料處理套件或表格讀取；未明顯看到有從檔案讀取資料；未明顯看到有輸出處理後資料或圖表；未明顯看到有批次處理/迴圈流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>金融資料與探勘_期中報告411042033陳樸.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>未提交/未辨識</td>
+      <td>0</td>
+      <td>15</td>
+      <td>缺少 AI Prompt 紀錄</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>3</td>
+      <td>10</td>
+      <td>Report 檔名未完全符合規範或不易辨識；缺少檔案：Process, AI Prompt</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 96 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411042033_2024.xlsx.csv</td>
+      <td>11</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411042033_2024.ipynb</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411042033_2024.pdf</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_第七組_2022-2024.csv</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 7 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第七組_2022-2024.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 7 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第七組_2022-2024.pptx</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 7 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要_第七組.docx</td>
+      <td>5</td>
+      <td>6</td>
+      <td>報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+      <td>第 7 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411042033_2024.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411111211 洪凱倫</h3>
+<h4>HW1: 84 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411111211_2022.xlsx</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411111211_2022.ipynb</td>
+      <td>15</td>
+      <td>30</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411111211_2022.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411111211_2022.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 91 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411111211_2022.csv</td>
+      <td>11</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411111211_2022.ipynb</td>
+      <td>6</td>
+      <td>12</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411111211_2022.pdf</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_第七組_2022-2024.xlsx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 7 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第七組_2022-2024.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 7 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第七組_2022-2024.pptx</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 7 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要_第七組.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 7 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411111211_2022.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411111220 劉育佑</h3>
+<h4>HW1: 91 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411111220_2020.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411111220_2020.py</td>
+      <td>22</td>
+      <td>30</td>
+      <td>未明顯看到有使用資料處理套件或表格讀取；未明顯看到有函式化整理</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411111220_2020.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411111220_2020.pdf</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 86 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IV_Statistics_411111220.csv</td>
+      <td>8</td>
+      <td>12</td>
+      <td>IVData 未明顯看到 IV 欄位</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411111220_2020.ipynb</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>MidtermReport_第11組_2020.docx</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_G11_2022-2024.xlsx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 11 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第11組_2020.docx</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 11 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第11組_2020.pptx</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 11 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要_G11.xlsx</td>
+      <td>4</td>
+      <td>6</td>
+      <td>報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+      <td>第 11 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>未提交/未辨識</td>
+      <td>0</td>
+      <td>6</td>
+      <td>缺少 AI Prompt 紀錄</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411121265 楊栩函</h3>
+<h4>HW1: 83 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411121265_2021.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411121265_2021.ipynb</td>
+      <td>15</td>
+      <td>30</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Reprot_411121265_2021.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411121265_2021.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>9</td>
+      <td>10</td>
+      <td>Report 檔名未完全符合規範或不易辨識</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 85 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411121265_2021.csv</td>
+      <td>5</td>
+      <td>12</td>
+      <td>IVData 未明顯看到 IV 欄位；IVData 未明顯看到 PCR/Put-Call 欄位</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411121265_2021.ipynb</td>
+      <td>6</td>
+      <td>12</td>
+      <td>程式未明顯處理 PCR；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReprot_411121265_2021.pdf</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_第一組_2021_2023.xlsx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 1 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第一組_2021-2023.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 1 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第一組_2021-2023.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 1 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要_第一組.pdf</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 1 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411121265_2021.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411121267 李雨萱</h3>
+<h4>HW1: 84 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411121267_2023.xlsx</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411121267_2023.ipynb</td>
+      <td>15</td>
+      <td>30</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411121267_2023.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411121267_2023.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 90 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411121267_2023.csv</td>
+      <td>11</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411121267_2023.ipynb</td>
+      <td>6</td>
+      <td>12</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411121267_2023.pdf</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_第一組_2021_2023.xlsx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 1 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第一組_2021-2023.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 1 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第一組_2021-2023.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 1 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要_第一組.pdf</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 1 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411121267_2023.pdf</td>
+      <td>5</td>
+      <td>6</td>
+      <td>AI Prompt 紀錄不完整</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411136025 陳昭安</h3>
+<h4>Midterm: 79 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411136025_2022.xlsx.csv</td>
+      <td>11</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411136025_2024.py</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>MidtermReport_G11_2022-2024.pdf</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_G11_2022-2024.xlsx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 10 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_G11_2022-2024.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 10 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>未提交/未辨識</td>
+      <td>0</td>
+      <td>12</td>
+      <td>缺少報告檔</td>
+      <td>第 10 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要_G11.xlsx</td>
+      <td>4</td>
+      <td>6</td>
+      <td>報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+      <td>第 10 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411136025_2022-2024.xlsx</td>
+      <td>2</td>
+      <td>6</td>
+      <td>AI Prompt 紀錄不完整</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411136028 陳俊佐</h3>
+<h4>HW1: 65 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411136028_2023.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>未提交/未辨識</td>
+      <td>0</td>
+      <td>30</td>
+      <td>缺少 Process 程式；程式內容偏少或無法讀取；未明顯看到有使用資料處理套件或表格讀取；未明顯看到有從檔案讀取資料；未明顯看到有輸出處理後資料或圖表；未明顯看到有批次處理/迴圈流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411136028_2023.docx</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AI Prompt_411136028_2023.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>6</td>
+      <td>10</td>
+      <td>缺少檔案：Process</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 97 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411136028_2023.csv</td>
+      <td>11</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411136028_2023.py</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411136028_2023.docx</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_G07_2022-2024.csv</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 7 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_G07_2022-2024.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 7 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_G07_2022-2024.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 7 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要_G07.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 7 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AI Prompt_411136028_2023.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411236002 王韋竣</h3>
+<h4>HW1: 82 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411236002_2022.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411236002_2022.ipynb</td>
+      <td>15</td>
+      <td>30</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411236002_2022.pdf</td>
+      <td>22</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411236002_2022.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 79 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411236002_2022.xlsx</td>
+      <td>2</td>
+      <td>12</td>
+      <td>IVData 無法正常讀取：error: ValueError；IVData 未明顯看到 IV 欄位；IVData 未明顯看到 PCR/Put-Call 欄位</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411236002_2022.ipynb</td>
+      <td>6</td>
+      <td>12</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411236002_ 2022.pdf</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_2Y_G06_2021-2022 - TXO_2021_Full_Statistics_Report.csv</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 6 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第六組_2021-2022.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 6 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第6組_2021-2022.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 6 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>二年整合摘要_第六組.pdf</td>
+      <td>4</td>
+      <td>6</td>
+      <td>報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+      <td>第 6 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411236002_2022.pdf</td>
+      <td>5</td>
+      <td>6</td>
+      <td>AI Prompt 紀錄不完整</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411236005 鄭景睿</h3>
+<h4>HW1: 99 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411236005_2021.xlsx</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411236005_2021.py</td>
+      <td>30</td>
+      <td>30</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411236005_2021.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411236005_2021.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 83 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IV_3Y_4_2018-2020.zip</td>
+      <td>8</td>
+      <td>12</td>
+      <td>IVData 未明顯看到 PCR/Put-Call 欄位</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411236005_2018call.py.py</td>
+      <td>10</td>
+      <td>12</td>
+      <td>程式未明顯處理 PCR；Rf/無風險利率疑似直接使用固定數值，未依日期、月份或年度變動處理</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>Report_411236005_2018.pdf</td>
+      <td>4</td>
+      <td>10</td>
+      <td>報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_4_2018-2020.zip</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 4 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>期中第四組書面報告.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 4 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>金融資料探勘第四組簡報.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 4 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要4組 別.docx.pdf</td>
+      <td>2</td>
+      <td>6</td>
+      <td>報告無法抽取足夠文字，需人工確認內容；報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+      <td>第 4 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411236005_2018.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411236006 鄭宇辰</h3>
+<h4>HW1: 99 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411236006_2021.csv.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>process_411236006_2021.py</td>
+      <td>30</td>
+      <td>30</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411236006_2021.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411236006_2021.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 95 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411236006_2021 - ..csv</td>
+      <td>11</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>process_411236006_2021_.py</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411236006_ 2021.pdf</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_2Y_G06_2021-2022 - TXO_2021_Full_Statistics_Report.csv</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 6 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第六組_2021-2022.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 6 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第六組_2021-2022.pptx</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 6 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>二年整合摘要_第六組 (1).pdf</td>
+      <td>4</td>
+      <td>6</td>
+      <td>報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+      <td>第 6 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411236006_2021 (1).docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411236022 鄭廷宸</h3>
+<h4>HW1: 99 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411236022_2019 (1).xlsx</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411236022_2019.ipynb</td>
+      <td>30</td>
+      <td>30</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411236022_2019.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411236022_2019.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 91 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411236022_2019.csv.csv</td>
+      <td>11</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411236022_2019年.ipynb</td>
+      <td>11</td>
+      <td>12</td>
+      <td>未明顯看到有批次處理/迴圈流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411236022_.docx</td>
+      <td>8</td>
+      <td>10</td>
+      <td>報告文字內容偏少</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_4_2018-2020.zip</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 4 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>期中第四組書面報告.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 4 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>金融資料探勘第四組簡報.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 4 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要4組 別.docx.pdf</td>
+      <td>2</td>
+      <td>6</td>
+      <td>報告無法抽取足夠文字，需人工確認內容；報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+      <td>第 4 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411236022_2019.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411236023 林侑霆</h3>
+<h4>HW1: 30 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411236023_2020.xlsx</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>未提交/未辨識</td>
+      <td>0</td>
+      <td>30</td>
+      <td>缺少 Process 程式；程式內容偏少或無法讀取；未明顯看到有使用資料處理套件或表格讀取；未明顯看到有從檔案讀取資料；未明顯看到有輸出處理後資料或圖表；未明顯看到有批次處理/迴圈流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>未提交/未辨識</td>
+      <td>0</td>
+      <td>25</td>
+      <td>缺少報告檔</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411236023_2020.docx</td>
+      <td>6</td>
+      <td>15</td>
+      <td>AI Prompt 紀錄不完整</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>4</td>
+      <td>10</td>
+      <td>缺少檔案：Process, Report</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 67 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411236023_2019.zip</td>
+      <td>2</td>
+      <td>12</td>
+      <td>IVData 無法正常讀取：zip-no-table；IVData 未明顯看到 IV 欄位；IVData 未明顯看到 PCR/Put-Call 欄位</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411236023_2019.ipynb.py</td>
+      <td>4</td>
+      <td>12</td>
+      <td>程式未明顯處理 PCR；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程；Rf/無風險利率疑似直接使用固定數值，未依日期、月份或年度變動處理</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411236023_2019.pdf</td>
+      <td>3</td>
+      <td>10</td>
+      <td>報告文字內容偏少；報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_4_2018-2020.zip</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 4 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>期中第四組書面報告.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 4 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>金融資料探勘第四組簡報.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 4 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要4組 別.docx.pdf</td>
+      <td>2</td>
+      <td>6</td>
+      <td>報告無法抽取足夠文字，需人工確認內容；報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+      <td>第 4 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411236023_2019.docx</td>
+      <td>3</td>
+      <td>6</td>
+      <td>AI Prompt 紀錄不完整</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411236052 許奕翔</h3>
+<h4>Midterm: 87 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>411236052_TXO_Detailed_All_2023.csv</td>
+      <td>9</td>
+      <td>12</td>
+      <td>IVData 未明顯看到 PCR/Put-Call 欄位</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411236052_2023.ipynb</td>
+      <td>4</td>
+      <td>12</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程；Rf/無風險利率疑似直接使用固定數值，未依日期、月份或年度變動處理</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndivisualReport_411236052_2023.pdf</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>TXO_Summary_Call_2023~2024.xlsx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 9 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第九組_2023-2024.pptx</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 9 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第九組_2023-2024.pptx</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 9 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>2023~2024整合摘要_第九組.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 9 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AI_Prompt_411236052_2023.pdf</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411236057 黃柏崴</h3>
+<h4>HW1: 72 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>index_411236057_2024.xlsx</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411236057_2024.ipynb</td>
+      <td>22</td>
+      <td>30</td>
+      <td>未明顯看到有批次處理/迴圈流程；未明顯看到有函式化整理</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411236057_2024.pdf</td>
+      <td>9</td>
+      <td>25</td>
+      <td>報告無法抽取足夠文字，需人工確認內容；報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411236057_2024.docx</td>
+      <td>11</td>
+      <td>15</td>
+      <td>AI Prompt 紀錄不完整</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 89 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411236057_2024.csv</td>
+      <td>6</td>
+      <td>12</td>
+      <td>IVData 未明顯看到 IV 欄位；IVData 未明顯看到 PCR/Put-Call 欄位</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411236057_2024.docx</td>
+      <td>9</td>
+      <td>12</td>
+      <td>程式內容偏少或無法讀取；Rf/無風險利率疑似直接使用固定數值，未依日期、月份或年度變動處理</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411236057_2024.docx</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>TXO_Summary_Call_2023~2024.xlsx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 9 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第九組_2023-2024.pptx</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 9 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第九組_2023-2024.pptx</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 9 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>2023~2024整合摘要_第九組.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 9 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AI_Prompt_411236057_2024.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336001 陳奕如</h3>
+<h4>HW1: 84 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336001_2023.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411336001_2023.ipynb</td>
+      <td>15</td>
+      <td>30</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336001_2023.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411336001_2023.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 92 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411336001_2023.xlsx</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411336001_2023.ipynb</td>
+      <td>6</td>
+      <td>12</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411336001_2023.docx</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_第三組_2022-2024.xlsx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 3 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第3組_2022-2024.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 3 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第三組_2022-2024.pptx</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 3 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要_第3組.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 3 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411336001_2023 .docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336004 劉芳孜</h3>
+<h4>HW1: 75 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336004_2022.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411336004_2022.py</td>
+      <td>15</td>
+      <td>30</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336004_2022.pdf</td>
+      <td>15</td>
+      <td>25</td>
+      <td>報告未明顯涵蓋核心欄位、方法或分析關鍵字</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411336004_2022.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 92 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411336004_2022.csv</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411336004_2022.ipynb</td>
+      <td>6</td>
+      <td>12</td>
+      <td>程式未明顯處理 PCR；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411336004_2022.pdf</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_第3組_2022-2024.xlsx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 3 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第3組_2022-2024.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 3 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第3組_2022-2024.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 3 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要_第3組.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 3 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411336004_2022.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336011 高苡寧</h3>
+<h4>HW1: 83 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336011_2024.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411336011_2024.py</td>
+      <td>15</td>
+      <td>30</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336011_2024.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_4113336011_2024.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>9</td>
+      <td>10</td>
+      <td>AIPrompt 檔名未完全符合規範或不易辨識</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 92 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411336011_2024.csv</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411336011_2024.py</td>
+      <td>6</td>
+      <td>12</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411336011_2024.pdf</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_第三組_2022-2024.xlsx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 3 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第3組_2022-2024.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 3 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第三組_2022-2024.pptx</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 3 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要_第3組.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 3 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_4113336011_2024.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336017 郭洪愷</h3>
+<h4>HW1: 93 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336017_2022.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411336017_2022.py</td>
+      <td>24</td>
+      <td>30</td>
+      <td>程式內容偏少或無法讀取</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336017_2022.docx</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411336017_郭洪愷.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 91 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411336017_2022.csv</td>
+      <td>11</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411336017_2022.py</td>
+      <td>6</td>
+      <td>12</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>MidtermReport_G05_2021-2024.docx</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_4Y_G05_2021-2024.csv</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 5 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_G05_2021-2024.docx</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 5 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_G05_2021-2024.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 5 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>四年整合摘要_第5組.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 5 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411336017_2022.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336018 施孋倫</h3>
+<h4>HW1: 84 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336018_2022.xlsx</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411336018_2022.ipynb</td>
+      <td>15</td>
+      <td>30</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336018_2022.docx</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411336018_2022.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 91 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411336018_2022.csv</td>
+      <td>11</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411336018_2022.ipynb</td>
+      <td>6</td>
+      <td>12</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411336018_2022.docx</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_第一組_2021_2023.xlsx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 1 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第一組_2021-2023.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 1 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第一組_2021-2023.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 1 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要_第一組.pdf</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 1 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411336018_2022.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336019 郭榮恩</h3>
+<h4>HW1: 84 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336019_2023.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411336019_2023.ipynb</td>
+      <td>15</td>
+      <td>30</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336019_2023.docx</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AI Prompt_411336019_2023.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336020 劉育慈</h3>
+<h4>HW1: 84 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336020_2024.xlsx.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411336020_2024 (1).ipynb</td>
+      <td>15</td>
+      <td>30</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336020_2024.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411336020_2024.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 83 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411336020_2024.xlsx.csv</td>
+      <td>4</td>
+      <td>12</td>
+      <td>IVData 未明顯看到 IV 欄位；IVData 未明顯看到 PCR/Put-Call 欄位</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411336020_2024 .ipynb</td>
+      <td>6</td>
+      <td>12</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411336020_2024.pdf.pdf</td>
+      <td>8</td>
+      <td>10</td>
+      <td>報告文字內容偏少</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_2_2022-2024.xlsx.xlsx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 2 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_2_2022-2024.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 2 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_2_2022-2024.pptx.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 2 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>三年整合摘要_2.docx.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 2 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411336020_2024.dox.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336021 楊盛凱</h3>
+<h4>HW1: 84 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336021_2024.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411336021_2024.ipynb</td>
+      <td>15</td>
+      <td>30</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336021_2024.docx</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411336021_2024.docx.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 91 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411336021_2024.csv</td>
+      <td>11</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411336021_2024.ipynb</td>
+      <td>6</td>
+      <td>12</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411336021_2024.docx</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_4Y_G05_2021-2024.csv</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 5 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_G05_2021-2024.docx</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 5 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第五組_2021-2024.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 5 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>四年整合摘要_第5組.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 5 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411336021_2024.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336035 譚君立</h3>
+<h4>HW1: 83 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336035_2021.csv</td>
+      <td>19</td>
+      <td>20</td>
+      <td>Index 缺必要資料欄位：Rf</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411336035_2021.ipynb.ipynb</td>
+      <td>15</td>
+      <td>30</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336035_2021.pdf.docx</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411336035_2021.docx.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 79 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IV_4Y_G05_2021-2024.csv</td>
+      <td>11</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>未提交/未辨識</td>
+      <td>0</td>
+      <td>12</td>
+      <td>缺少 Process 程式；程式內容偏少或無法讀取；未明顯看到有使用資料處理套件或表格讀取；未明顯看到有從檔案讀取資料；未明顯看到有輸出處理後資料或圖表；未明顯看到有批次處理/迴圈流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>MidtermReport_G05_2021-2024.docx</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_4Y_G05_2021-2024.csv</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 5 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_G05_2021-2024.docx</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 5 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_G05_2021-2024.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 5 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>四年整合摘要_第5組 (1).docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 5 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>未提交/未辨識</td>
+      <td>0</td>
+      <td>6</td>
+      <td>缺少 AI Prompt 紀錄</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336039 張嘉洵</h3>
+<h4>HW1: 84 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336039_2020.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411336039_2020.ipynb</td>
+      <td>15</td>
+      <td>30</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336039_2020.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411336039_2020.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 89 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411336039_2020.csv</td>
+      <td>11</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411336039_2020.ipynb</td>
+      <td>4</td>
+      <td>12</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程；Rf/無風險利率疑似直接使用固定數值，未依日期、月份或年度變動處理</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411336039_2020.docx</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_4Y_5_2020-2023年.csv</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第五組_2020-2023.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_5_2020-2023.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>四年整合摘要_5.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411336039_2020.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336043 張心田</h3>
+<h4>HW1: 99 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336043_2023.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>process_411336043_2023.py</td>
+      <td>30</td>
+      <td>30</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336043_2023.pdf.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>IPrompt_411336043_2023.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 80 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411336043_2023.xlsx</td>
+      <td>6</td>
+      <td>12</td>
+      <td>IVData 未明顯看到 IV 欄位；IVData 未明顯看到 PCR/Put-Call 欄位</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411336043_2023.ipynb</td>
+      <td>6</td>
+      <td>12</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411336043_ 2023.pdf</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_2_2022-2024.xlsx.xlsx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 2 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_2_2022-2024.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 2 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_2_2022-2024.pptx.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 2 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>未提交/未辨識</td>
+      <td>0</td>
+      <td>6</td>
+      <td>缺少報告檔</td>
+      <td>第 2 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411336043_2023.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336045 林欣慈</h3>
+<h4>HW1: 91 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336045_2022.xlsx</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411336045_2022.py</td>
+      <td>22</td>
+      <td>30</td>
+      <td>未明顯看到有批次處理/迴圈流程；Rf/無風險利率疑似直接使用固定數值，未依日期、月份或年度變動處理</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336045_2022.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411336045_2022.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 84 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411336045_2022.xlsx</td>
+      <td>6</td>
+      <td>12</td>
+      <td>IVData 未明顯看到 IV 欄位；IVData 未明顯看到 PCR/Put-Call 欄位</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411336045_2022.py</td>
+      <td>10</td>
+      <td>12</td>
+      <td>未明顯看到有輸出處理後資料或圖表；未明顯看到有批次處理/迴圈流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411336045_ 2022.pdf</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_3Y_2_2022-2024.xlsx.xlsx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 2 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_2_2022-2024.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 2 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_2_2022-2024.pptx.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 2 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>未提交/未辨識</td>
+      <td>0</td>
+      <td>6</td>
+      <td>缺少報告檔</td>
+      <td>第 2 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411336045_2022.pdf</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336054 周勁廷</h3>
+<h4>HW1: 95 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336054_2023 .csv.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411336054_2023.ipynb</td>
+      <td>26</td>
+      <td>30</td>
+      <td>未明顯看到有批次處理/迴圈流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336054_2023.pdf.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AIPrompt_411336054_2023.docx .docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 95 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411336054_2023.xlsx.csv</td>
+      <td>11</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411336054_2023.ipynb</td>
+      <td>10</td>
+      <td>12</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式未明顯處理 PCR</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411336054_2023.docx</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_4Y_第八組_2020-2023年.csv</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>金融資料探勘_第八組.pdf.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第八組_2020-2023.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>四年整合摘要_第八組.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AIPrompt_411336054_2023.docx .docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336062 柯亦陽</h3>
+<h4>HW1: 95 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336062_2022.xlsx</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411336062_2022.ipynb</td>
+      <td>26</td>
+      <td>30</td>
+      <td>未明顯看到有批次處理/迴圈流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336062_2022.pdf.pdf</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AlPrompt_411336062_2022.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 91 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411336062_2022.xlsx</td>
+      <td>10</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411336062_2022.py</td>
+      <td>10</td>
+      <td>12</td>
+      <td>未明顯看到有批次處理/迴圈流程；程式未明顯處理 PCR</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411336062_2022.docx</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_4Y_第八組_2020-2023年.csv</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第八組_2020-2023.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_第八組_2020-2023.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>四年整合摘要_第八組.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AI_Prompt_Record_411336062_2022.docx</td>
+      <td>3</td>
+      <td>6</td>
+      <td>AI Prompt 紀錄不完整</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+<section class='student'><h3>411336064 周柏勳</h3>
+<h4>HW1: 84 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Index 資料檔</td>
+      <td>Index_411336064_2021.csv</td>
+      <td>20</td>
+      <td>20</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Process 程式</td>
+      <td>Process_411336064_2021.ipynb</td>
+      <td>15</td>
+      <td>30</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Report 報告</td>
+      <td>Report_411336064_2021.docx</td>
+      <td>24</td>
+      <td>25</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>AI Prompt 紀錄</td>
+      <td>AI Prompt _411336064_2021.docx</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>繳交格式與命名</td>
+      <td>整體繳交項目</td>
+      <td>10</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<h4>Midterm: 91 / 100</h4>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>檔案/項目</th>
+      <th>檔名</th>
+      <th>得分</th>
+      <th>滿分</th>
+      <th>扣分原因</th>
+      <th>來源</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人 IVData</td>
+      <td>IVData_411336064_2021.csv</td>
+      <td>11</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人 Process</td>
+      <td>Process_411336064_2021.ipynb</td>
+      <td>6</td>
+      <td>12</td>
+      <td>程式像多段 AI/教學片段堆疊，依賴中間檔串接，未整理成清楚的一次性流程</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>個人報告</td>
+      <td>IndividualReport_411336064_2021.docx</td>
+      <td>9</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>小組 IV/PCR 整合資料</td>
+      <td>IV_4Y_8_2020-2023年.csv</td>
+      <td>15</td>
+      <td>15</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>小組書面報告與 insight</td>
+      <td>MidtermReport_第八組_2020-2023.pdf</td>
+      <td>26</td>
+      <td>27</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>小組簡報</td>
+      <td>MidtermSlides_8_2020-2023.pdf</td>
+      <td>12</td>
+      <td>12</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>小組摘要/整合說明</td>
+      <td>四年整合摘要_8.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td>第 8 組</td>
+    </tr>
+    <tr>
+      <td>個人 AI Prompt</td>
+      <td>AI Prompt _411336064_2021.docx</td>
+      <td>6</td>
+      <td>6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+</section>
+</body></html>

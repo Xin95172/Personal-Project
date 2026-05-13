@@ -99,9 +99,14 @@ def fetch_factors_batch(tickers: list[str], cache_path: str = "factors_cache.pkl
             if i % 10 == 0:
                 print(f"  - 抓取進度: {i+1} / {len(needs_fetch)}...")
             result = fetch_factors(t)
-            if result is not None:
-                result['last_updated'] = now
-                new_rows.append(result)
+            
+            # 如果抓不到資料 (回傳 None)，仍然要給它一個包含 ticker 的空紀錄
+            # 這樣才會被寫入快取，下次就不會再重複花時間抓它
+            if result is None:
+                result = {"ticker": t}
+                
+            result['last_updated'] = now
+            new_rows.append(result)
             time.sleep(0.5) # 避免 API 限制
             
         if new_rows:
