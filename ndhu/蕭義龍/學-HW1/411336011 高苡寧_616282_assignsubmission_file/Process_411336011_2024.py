@@ -1,5 +1,4 @@
-﻿
-import pandas as pd
+﻿import pandas as pd
 import datetime
 
 # 1. 讀取原始資料
@@ -39,58 +38,6 @@ print(f"處理完成！檔案已儲存為: {output_filename}")
 # 查看前 5 筆結果
 print("\n資料預覽：")
 print(output_df.head())
-
-import pandas as pd
-
-# 1. 讀取資料
-# 請確保檔案已上傳至 Colab
-df_market = pd.read_csv('金融資料探勘.csv')
-df_options = pd.read_csv('指數選擇權.csv')
-
-# 2. 資料格式轉換
-df_market['年月日'] = pd.to_datetime(df_market['年月日'])
-df_options['最後結算日'] = pd.to_datetime(df_options['最後結算日'])
-
-# 3. 篩選出「月選擇權」 (排除契約月份中包含 'W' 的資料)
-# 根據您的需求，月選擇權的契約月份通常為 6 位數字 (如 202410)
-df_monthly_options = df_options[~df_options['契約月份'].str.contains('W', na=False)].copy()
-df_monthly_options = df_monthly_options.sort_values('最後結算日')
-
-# 4. 定義尋找最近月選合約的函數
-def find_nearest_contract(trade_date):
-    # 條件：結算日 - 交易日 > 1 天 (即至少差 2 天或以上)
-    # 篩選出所有結算日在交易日之後的合約
-    valid_contracts = df_monthly_options[
-        (df_monthly_options['最後結算日'] - trade_date).dt.days > 1
-    ]
-
-    if not valid_contracts.empty:
-        # 取最近的一個合約 (第一筆)
-        nearest = valid_contracts.iloc[0]
-        maturity = (nearest['最後結算日'] - trade_date).days
-        return pd.Series([nearest['契約月份'], nearest['最後結算日'], maturity])
-    else:
-        return pd.Series([None, None, None])
-
-# 5. 執行對比與新增欄位
-# 套用函數並將結果合併回原表
-df_market[['Contract', 'ContractExpiryDate', 'Maturity']] = df_market['年月日'].apply(find_nearest_contract)
-
-# 6. 整理格式
-# 將日期轉回字串格式以便閱讀
-df_market['ContractExpiryDate'] = df_market['ContractExpiryDate'].dt.strftime('%Y/%m/%d')
-df_market['Date'] = df_market['年月日'].dt.strftime('%Y/%m/%d')
-
-# 挑選並排列最終欄位
-result_df = df_market[['Date', '收盤價(元)', 'Contract', 'ContractExpiryDate', 'Maturity']]
-
-# 7. 儲存結果並預覽
-output_file = '金融資料探勘_帶選擇權資訊.csv'
-result_df.to_csv(output_file, index=False, encoding='utf-8-sig')
-
-print(f"處理完成！已生成：{output_file}")
-print("\n--- 資料預覽 (前 10 筆) ---")
-print(result_df.head(10))
 
 import pandas as pd
 
@@ -215,65 +162,3 @@ result_df.to_csv(output_filename, index=False, encoding='utf-8-sig')
 print(f"處理完成！已補全 12/17 後的資料並儲存為：{output_filename}")
 print("\n--- 檢查 2024/12/16 之後的資料 ---")
 print(result_df[result_df['Date'] >= '2024/12/16'].head(10))
-
-import pandas as pd
-import io
-import requests
-from google.colab import files
-
-# 1. 上傳檔案
-print("請上傳『金融資料探勘_完整格式 (2).csv』：")
-uploaded = files.upload()
-file_name = list(uploaded.keys())[0]
-
-# 2. 讀取原始資料
-df = pd.read_csv(io.BytesIO(uploaded[file_name]))
-# 統一將日期欄位轉為 datetime 格式以便對照
-date_col = 'Date' if 'Date' in df.columns else '年月日'
-df[date_col] = pd.to_datetime(df[date_col])
-
-# 3. 獲取台灣銀行利率數據 (Rf)
-# 這裡使用政府資料開放平臺的台銀利率 API (或讀取其歷史資料)
-# 為確保程式穩定，若 API 暫時無法連線，我們會使用 2024 年常見的機動利率 (約 1.725%) 作為填充基礎
-print("正在獲取台灣銀行定存利率數據...")
-
-try:
-    # 嘗試抓取台銀歷史利率 (示意，實務上可對接政府 Open Data)
-    # 這裡建立一個簡單的利率查找表 (2024年台灣銀行一年期定儲機動利率變動點)
-    # 2024/03/21 央行升息半碼，3/25起台銀調整為 1.725%
-    rate_table = pd.DataFrame({
-        'EffectiveDate': pd.to_datetime(['2023-01-01', '2024-03-25']),
-        'Rate': [1.59, 1.725]  # 單位: %
-    })
-
-    # 使用 merge_asof 進行「回溯查找」，即找出交易當日適用的最新利率
-    df = df.sort_values(date_col)
-    rate_table = rate_table.sort_values('EffectiveDate')
-
-    df = pd.merge_asof(
-        df,
-        rate_table,
-        left_on=date_col,
-        right_on='EffectiveDate',
-        direction='backward'
-    )
-
-    # 將利率填入 Rf 欄位 (通常金融模型使用小數點形式，如 1.725% -> 0.01725)
-    df['Rf'] = df['Rate'] / 100
-    df = df.drop(columns=['EffectiveDate', 'Rate'])
-
-except Exception as e:
-    print(f"自動抓取失敗，改用常數填充。錯誤原因: {e}")
-    df['Rf'] = 0.01725
-
-# 4. 格式化輸出
-# 將日期轉回字串格式 YYYY/MM/DD
-df[date_col] = df[date_col].dt.strftime('%Y/%m/%d')
-
-# 5. 儲存與下載
-output_name = "金融資料探勘_含Rf.csv"
-df.to_csv(output_name, index=False, encoding='utf-8-sig')
-
-print(f"\n處理完成！Rf 欄位已新增。")
-print(df.head())
-files.download(output_name)
