@@ -772,54 +772,16 @@ def backtest_basis_pair_with_formation_stats(
     zscore = fixed_zscore(target_spread, mean=spread_mean, std=spread_std)
     position = generate_pair_signals(zscore, entry_z=entry_z, exit_z=exit_z).astype(float)
 
-    q_y_futures = position
-    q_y_spot = -position
-    q_x_futures = -hedge_ratio * position
-    q_x_spot = hedge_ratio * position
+    lagged_position = position.shift(1).fillna(0)
 
-    q_y_futures_lag = q_y_futures.shift(1).fillna(0)
-    q_y_spot_lag = q_y_spot.shift(1).fillna(0)
-    q_x_futures_lag = q_x_futures.shift(1).fillna(0)
-    q_x_spot_lag = q_x_spot.shift(1).fillna(0)
+    y_basis_ret = y_futures.pct_change().fillna(0) - y_spot.pct_change().fillna(0)
+    x_basis_ret = x_futures.pct_change().fillna(0) - x_spot.pct_change().fillna(0)
+    spread_return = y_basis_ret - hedge_ratio * x_basis_ret
+    raw_strategy_return = lagged_position * spread_return
 
-    pnl = (
-        q_y_futures_lag * y_futures.diff().fillna(0)
-        + q_y_spot_lag * y_spot.diff().fillna(0)
-        + q_x_futures_lag * x_futures.diff().fillna(0)
-        + q_x_spot_lag * x_spot.diff().fillna(0)
-    )
-
-    gross_exposure = (
-        q_y_futures_lag.abs() * y_futures.shift(1)
-        + q_y_spot_lag.abs() * y_spot.shift(1)
-        + q_x_futures_lag.abs() * x_futures.shift(1)
-        + q_x_spot_lag.abs() * x_spot.shift(1)
-    )
-    current_gross_exposure = (
-        q_y_futures.abs() * y_futures
-        + q_y_spot.abs() * y_spot
-        + q_x_futures.abs() * x_futures
-        + q_x_spot.abs() * x_spot
-    )
-
-    turnover = (
-        (q_y_futures - q_y_futures_lag).abs() * y_futures
-        + (q_y_spot - q_y_spot_lag).abs() * y_spot
-        + (q_x_futures - q_x_futures_lag).abs() * x_futures
-        + (q_x_spot - q_x_spot_lag).abs() * x_spot
-    )
-    cost = turnover * fee_rate
-    net_pnl = pnl - cost
-
-    pnl_denominator = gross_exposure.replace(0, np.nan)
-    pnl_return = (pnl / pnl_denominator).replace([np.inf, -np.inf], np.nan).fillna(0)
-
-    cost_denominator = current_gross_exposure.where(
-        current_gross_exposure > 0,
-        gross_exposure,
-    ).replace(0, np.nan)
-    cost_return = (cost / cost_denominator).replace([np.inf, -np.inf], np.nan).fillna(0)
-    strategy_return = pnl_return - cost_return
+    turnover = position.diff().abs().fillna(position.abs())
+    trading_cost = turnover * fee_rate * (2 + 2 * abs(hedge_ratio))
+    strategy_return = raw_strategy_return - trading_cost
 
     result = pd.DataFrame(
         {
@@ -832,19 +794,13 @@ def backtest_basis_pair_with_formation_stats(
             "target_spread": target_spread,
             "zscore": zscore,
             "position": position,
-            "y_futures_position": q_y_futures,
-            "y_spot_position": q_y_spot,
-            "x_futures_position": q_x_futures,
-            "x_spot_position": q_x_spot,
-            "gross_exposure": gross_exposure,
-            "current_gross_exposure": current_gross_exposure,
-            "pnl": pnl,
-            "spread_pnl": pnl,
+            "lagged_position": lagged_position,
+            "y_basis_ret": y_basis_ret,
+            "x_basis_ret": x_basis_ret,
+            "spread_return": spread_return,
+            "raw_strategy_return": raw_strategy_return,
             "turnover": turnover,
-            "cost": cost,
-            "net_pnl": net_pnl,
-            "pnl_return": pnl_return,
-            "cost_return": cost_return,
+            "trading_cost": trading_cost,
             "strategy_return": strategy_return,
             "equity_curve": (1 + strategy_return).cumprod(),
             "formation_spread_mean": spread_mean,
