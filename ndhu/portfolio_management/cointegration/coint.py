@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from itertools import combinations
 import json
+import os
 from pathlib import Path
 from typing import Iterable
 
@@ -18,6 +20,11 @@ except ImportError:  # pragma: no cover - optional runtime dependency
     sm = None
     adfuller = None
     coint = None
+
+try:
+    from tqdm.auto import tqdm
+except ImportError:  # pragma: no cover - optional runtime dependency
+    tqdm = None
 
 
 @dataclass(frozen=True)
@@ -66,6 +73,7 @@ def load_price_series(
         raise KeyError(
             f"Neither DatetimeIndex nor {time_column!r} exists in {parquet_path.name}",
         )
+    index = _to_naive_datetime_index(index)
 
     series = pd.Series(
         pd.to_numeric(df[price_column], errors="coerce").to_numpy(),
@@ -110,6 +118,34 @@ def load_price_matrix(
 
     prices = pd.concat(series_list, axis=1).sort_index()
     return prices.dropna(axis=1, thresh=min_obs)
+
+
+def load_funding_matrix(
+    directory: str | Path,
+    symbols: Iterable[str] | None = None,
+    funding_column: str = "fundingRate",
+    time_column: str = "open_time",
+    min_obs: int = 1,
+    timestamp_floor: str | None = "h",
+) -> pd.DataFrame:
+    """Load funding-rate Parquet files into an aligned matrix.
+
+    Positive funding means longs pay shorts. Missing timestamps are treated as
+    zero funding in the backtest because funding is charged only periodically.
+    """
+
+    funding = load_price_matrix(
+        directory=directory,
+        symbols=symbols,
+        price_column=funding_column,
+        time_column=time_column,
+        min_obs=min_obs,
+    )
+    if timestamp_floor and not funding.empty:
+        funding = funding.copy()
+        funding.index = funding.index.floor(timestamp_floor)
+        funding = funding.groupby(level=0).last().sort_index()
+    return funding
 
 
 def calculate_basis(
@@ -316,29 +352,48 @@ def scan_cointegrated_pairs(
     max_spread_adf_pvalue: float = 0.05,
     min_obs: int = 500,
     top_n: int | None = 30,
+    n_jobs: int = 1,
+    show_progress: bool = False,
+    progress_desc: str | None = None,
 ) -> pd.DataFrame:
     """Test all symbol pairs and return likely cointegrated candidates."""
 
-    results: list[CointegrationResult] = []
     clean_prices = prices.dropna(axis=1, thresh=min_obs)
+    pair_args = [
+        (
+            y_symbol,
+            x_symbol,
+            clean_prices[[y_symbol, x_symbol]].dropna(),
+            min_obs,
+            max_pvalue,
+            max_spread_adf_pvalue,
+        )
+        for y_symbol, x_symbol in combinations(clean_prices.columns, 2)
+    ]
 
-    for y_symbol, x_symbol in combinations(clean_prices.columns, 2):
-        pair = clean_prices[[y_symbol, x_symbol]].dropna()
-        if len(pair) < min_obs:
-            continue
-
-        try:
-            result = engle_granger_test(
-                pair[y_symbol],
-                pair[x_symbol],
-                y_symbol=y_symbol,
-                x_symbol=x_symbol,
+    workers = _resolve_n_jobs(n_jobs)
+    if workers == 1 or len(pair_args) <= 1:
+        iterator = _progress(
+            pair_args,
+            total=len(pair_args),
+            desc=progress_desc or "cointegration pairs",
+            enabled=show_progress,
+            leave=False,
+        )
+        results = [_scan_pair_task(args) for args in iterator]
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            iterator = executor.map(_scan_pair_task, pair_args)
+            iterator = _progress(
+                iterator,
+                total=len(pair_args),
+                desc=progress_desc or "cointegration pairs",
+                enabled=show_progress,
+                leave=False,
             )
-        except (ValueError, np.linalg.LinAlgError):
-            continue
+            results = list(iterator)
 
-        if result.pvalue <= max_pvalue and result.spread_adf_pvalue <= max_spread_adf_pvalue:
-            results.append(result)
+    results = [result for result in results if result is not None]
 
     columns = [
         "y_symbol",
@@ -366,22 +421,38 @@ def scan_sector_cointegrated_pairs(
     max_spread_adf_pvalue: float = 0.05,
     min_obs: int = 500,
     top_n_per_sector: int | None = 5,
+    n_jobs: int = 1,
+    show_progress: bool = False,
+    progress_prefix: str = "",
 ) -> pd.DataFrame:
     """Run cointegration scan separately within each sector."""
 
     frames: list[pd.DataFrame] = []
 
-    for sector, symbols in sector_map.items():
+    sector_items = list(sector_map.items())
+    sector_iterator = _progress(
+        sector_items,
+        total=len(sector_items),
+        desc=f"{progress_prefix}sectors".strip(),
+        enabled=show_progress,
+        leave=False,
+    )
+
+    for sector, symbols in sector_iterator:
         sector_symbols = [symbol for symbol in symbols if symbol in prices.columns]
         if len(sector_symbols) < 2:
             continue
 
+        pair_count = len(sector_symbols) * (len(sector_symbols) - 1) // 2
         candidates = scan_cointegrated_pairs(
             prices[sector_symbols],
             max_pvalue=max_pvalue,
             max_spread_adf_pvalue=max_spread_adf_pvalue,
             min_obs=min_obs,
             top_n=top_n_per_sector,
+            n_jobs=n_jobs,
+            show_progress=show_progress,
+            progress_desc=f"{progress_prefix}{sector} pairs ({pair_count})".strip(),
         )
         if candidates.empty:
             continue
@@ -407,8 +478,16 @@ def rolling_sector_cointegration_scan(
     max_spread_adf_pvalue: float = 0.05,
     min_obs: int = 500,
     top_n_per_sector: int | None = 3,
+    n_jobs: int = 1,
+    cache_path: str | Path | None = None,
+    use_cache: bool = True,
+    show_progress: bool = True,
 ) -> pd.DataFrame:
     """Scan sector-level cointegrated pairs in each rolling formation window."""
+
+    cache_path = Path(cache_path) if cache_path is not None else None
+    if use_cache and cache_path is not None and cache_path.exists():
+        return pd.read_parquet(cache_path)
 
     frames: list[pd.DataFrame] = []
     windows = iter_rolling_windows(
@@ -418,7 +497,15 @@ def rolling_sector_cointegration_scan(
         step=step,
     )
 
-    for window_id, window in enumerate(windows, 1):
+    window_iterator = _progress(
+        list(enumerate(windows, 1)),
+        total=len(windows),
+        desc="rolling windows",
+        enabled=show_progress,
+        leave=True,
+    )
+
+    for window_id, window in window_iterator:
         formation_prices = prices.loc[
             (prices.index >= window.formation_start)
             & (prices.index < window.formation_end)
@@ -433,6 +520,9 @@ def rolling_sector_cointegration_scan(
             max_spread_adf_pvalue=max_spread_adf_pvalue,
             min_obs=min_obs,
             top_n_per_sector=top_n_per_sector,
+            n_jobs=n_jobs,
+            show_progress=show_progress,
+            progress_prefix=f"window {window_id}: ",
         )
         if candidates.empty:
             continue
@@ -445,11 +535,19 @@ def rolling_sector_cointegration_scan(
         frames.append(candidates)
 
     if not frames:
-        return _empty_rolling_pair_frame()
+        output = _empty_rolling_pair_frame()
+        if cache_path is not None:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            output.to_parquet(cache_path, index=False)
+        return output
 
-    return pd.concat(frames, ignore_index=True).sort_values(
+    output = pd.concat(frames, ignore_index=True).sort_values(
         ["window_id", "sector", "pvalue", "spread_adf_pvalue", "test_stat"],
     ).reset_index(drop=True)
+    if cache_path is not None:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        output.to_parquet(cache_path, index=False)
+    return output
 
 
 def calculate_spread(
@@ -725,12 +823,15 @@ def backtest_basis_pair_with_formation_stats(
     entry_z: float = 2.0,
     exit_z: float = 0.5,
     fee_rate: float = 0.0004,
+    trading_y_funding_rate: pd.Series | None = None,
+    trading_x_funding_rate: pd.Series | None = None,
 ) -> pd.DataFrame:
-    """Backtest a four-leg relative basis spread.
+    """Backtest a return-based relative basis spread with optional funding.
 
     The traded target spread follows the user's convention:
     y_basis - hedge_ratio * x_basis. The intercept is kept for diagnostics and
     compatibility with OLS, but the trading spread does not subtract it.
+    Positive funding means long futures pay short futures.
     """
 
     formation_target_spread = (
@@ -773,15 +874,24 @@ def backtest_basis_pair_with_formation_stats(
     position = generate_pair_signals(zscore, entry_z=entry_z, exit_z=exit_z).astype(float)
 
     lagged_position = position.shift(1).fillna(0)
+    y_futures_funding_position = lagged_position
+    x_futures_funding_position = -hedge_ratio * lagged_position
 
     y_basis_ret = y_futures.pct_change().fillna(0) - y_spot.pct_change().fillna(0)
     x_basis_ret = x_futures.pct_change().fillna(0) - x_spot.pct_change().fillna(0)
     spread_return = y_basis_ret - hedge_ratio * x_basis_ret
     raw_strategy_return = lagged_position * spread_return
 
+    y_funding_rate = _align_optional_rate(trading_y_funding_rate, aligned.index)
+    x_funding_rate = _align_optional_rate(trading_x_funding_rate, aligned.index)
+    funding_return = -(
+        y_futures_funding_position * y_funding_rate
+        + x_futures_funding_position * x_funding_rate
+    )
+
     turnover = position.diff().abs().fillna(position.abs())
     trading_cost = turnover * fee_rate * (2 + 2 * abs(hedge_ratio))
-    strategy_return = raw_strategy_return - trading_cost
+    strategy_return = raw_strategy_return + funding_return - trading_cost
 
     result = pd.DataFrame(
         {
@@ -795,10 +905,15 @@ def backtest_basis_pair_with_formation_stats(
             "zscore": zscore,
             "position": position,
             "lagged_position": lagged_position,
+            "y_futures_funding_position": y_futures_funding_position,
+            "x_futures_funding_position": x_futures_funding_position,
             "y_basis_ret": y_basis_ret,
             "x_basis_ret": x_basis_ret,
             "spread_return": spread_return,
             "raw_strategy_return": raw_strategy_return,
+            "y_funding_rate": y_funding_rate,
+            "x_funding_rate": x_funding_rate,
+            "funding_return": funding_return,
             "turnover": turnover,
             "trading_cost": trading_cost,
             "strategy_return": strategy_return,
@@ -816,12 +931,13 @@ def walk_forward_basis_backtest(
     spot_prices: pd.DataFrame,
     futures_prices: pd.DataFrame,
     rolling_pairs: pd.DataFrame,
+    funding_rates: pd.DataFrame | None = None,
     max_pairs_per_window: int | None = 10,
     entry_z: float = 2.0,
     exit_z: float = 0.5,
     fee_rate: float = 0.0004,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Backtest rolling-selected sector pairs as four-leg basis trades."""
+    """Backtest rolling-selected sector pairs as return-based basis trades."""
 
     backtest_frames: list[pd.DataFrame] = []
     trade_summaries: list[dict[str, object]] = []
@@ -866,6 +982,8 @@ def walk_forward_basis_backtest(
                 entry_z=entry_z,
                 exit_z=exit_z,
                 fee_rate=fee_rate,
+                trading_y_funding_rate=_get_optional_column(funding_rates, y_symbol),
+                trading_x_funding_rate=_get_optional_column(funding_rates, x_symbol),
             )
             if pair_backtest.empty:
                 continue
@@ -919,11 +1037,12 @@ def build_trading_log(backtests: pd.DataFrame) -> pd.DataFrame:
                 "exit_time",
                 "entry_zscore",
                 "exit_zscore",
-                "y_futures_position",
-                "y_spot_position",
-                "x_futures_position",
-                "x_spot_position",
+                "entry_position",
+                "hedge_ratio",
+                "y_futures_funding_position",
+                "x_futures_funding_position",
                 "holding_periods",
+                "trade_funding_return",
                 "trade_return",
             ],
         )
@@ -949,10 +1068,9 @@ def build_trading_log(backtests: pd.DataFrame) -> pd.DataFrame:
                     "entry_zscore": row["zscore"],
                     "entry_equity": row["equity_curve"],
                     "entry_position": position,
-                    "y_futures_position": row.get("y_futures_position", np.nan),
-                    "y_spot_position": row.get("y_spot_position", np.nan),
-                    "x_futures_position": row.get("x_futures_position", np.nan),
-                    "x_spot_position": row.get("x_spot_position", np.nan),
+                    "hedge_ratio": row.get("hedge_ratio", np.nan),
+                    "y_futures_funding_position": row.get("y_futures_funding_position", np.nan),
+                    "x_futures_funding_position": row.get("x_futures_funding_position", np.nan),
                 }
                 continue
 
@@ -968,6 +1086,8 @@ def build_trading_log(backtests: pd.DataFrame) -> pd.DataFrame:
             exit_equity = float(row["equity_curve"])
             trade_return = exit_equity / entry_equity - 1 if entry_equity else np.nan
             entry_time = open_trade["entry_time"]
+            trade_slice = group.loc[entry_time:timestamp]
+            trade_funding_return = float(trade_slice.get("funding_return", pd.Series(dtype=float)).sum())
 
             trades.append(
                 {
@@ -980,11 +1100,12 @@ def build_trading_log(backtests: pd.DataFrame) -> pd.DataFrame:
                     "exit_time": timestamp,
                     "entry_zscore": open_trade["entry_zscore"],
                     "exit_zscore": row["zscore"],
-                    "y_futures_position": open_trade["y_futures_position"],
-                    "y_spot_position": open_trade["y_spot_position"],
-                    "x_futures_position": open_trade["x_futures_position"],
-                    "x_spot_position": open_trade["x_spot_position"],
+                    "entry_position": open_trade["entry_position"],
+                    "hedge_ratio": open_trade["hedge_ratio"],
+                    "y_futures_funding_position": open_trade["y_futures_funding_position"],
+                    "x_futures_funding_position": open_trade["x_futures_funding_position"],
                     "holding_periods": group.index.get_loc(timestamp) - group.index.get_loc(entry_time),
+                    "trade_funding_return": trade_funding_return,
                     "trade_return": trade_return,
                 },
             )
@@ -1000,10 +1121,9 @@ def build_trading_log(backtests: pd.DataFrame) -> pd.DataFrame:
                     "entry_zscore": row["zscore"],
                     "entry_equity": row["equity_curve"],
                     "entry_position": position,
-                    "y_futures_position": row.get("y_futures_position", np.nan),
-                    "y_spot_position": row.get("y_spot_position", np.nan),
-                    "x_futures_position": row.get("x_futures_position", np.nan),
-                    "x_spot_position": row.get("x_spot_position", np.nan),
+                    "hedge_ratio": row.get("hedge_ratio", np.nan),
+                    "y_futures_funding_position": row.get("y_futures_funding_position", np.nan),
+                    "x_futures_funding_position": row.get("x_futures_funding_position", np.nan),
                 }
             else:
                 open_trade = None
@@ -1014,6 +1134,8 @@ def build_trading_log(backtests: pd.DataFrame) -> pd.DataFrame:
             entry_equity = float(open_trade["entry_equity"])
             exit_equity = float(last_row["equity_curve"])
             entry_time = open_trade["entry_time"]
+            trade_slice = group.loc[entry_time:last_timestamp]
+            trade_funding_return = float(trade_slice.get("funding_return", pd.Series(dtype=float)).sum())
 
             trades.append(
                 {
@@ -1026,11 +1148,12 @@ def build_trading_log(backtests: pd.DataFrame) -> pd.DataFrame:
                     "exit_time": last_timestamp,
                     "entry_zscore": open_trade["entry_zscore"],
                     "exit_zscore": last_row["zscore"],
-                    "y_futures_position": open_trade["y_futures_position"],
-                    "y_spot_position": open_trade["y_spot_position"],
-                    "x_futures_position": open_trade["x_futures_position"],
-                    "x_spot_position": open_trade["x_spot_position"],
+                    "entry_position": open_trade["entry_position"],
+                    "hedge_ratio": open_trade["hedge_ratio"],
+                    "y_futures_funding_position": open_trade["y_futures_funding_position"],
+                    "x_futures_funding_position": open_trade["x_futures_funding_position"],
                     "holding_periods": group.index.get_loc(last_timestamp) - group.index.get_loc(entry_time),
+                    "trade_funding_return": trade_funding_return,
                     "trade_return": exit_equity / entry_equity - 1 if entry_equity else np.nan,
                 },
             )
@@ -1070,6 +1193,77 @@ def summarize_backtest(backtest: pd.DataFrame, periods_per_year: int = 24 * 365)
 def _require_statsmodels() -> None:
     if sm is None or adfuller is None or coint is None:
         raise ImportError("statsmodels is required. Install it with: pip install statsmodels")
+
+
+def _resolve_n_jobs(n_jobs: int) -> int:
+    if n_jobs == -1:
+        return max(os.cpu_count() or 1, 1)
+    if n_jobs < -1:
+        return max((os.cpu_count() or 1) + 1 + n_jobs, 1)
+    return max(n_jobs, 1)
+
+
+def _progress(
+    iterable: Iterable,
+    total: int | None = None,
+    desc: str | None = None,
+    enabled: bool = True,
+    leave: bool = False,
+):
+    if not enabled or tqdm is None:
+        return iterable
+    return tqdm(iterable, total=total, desc=desc, leave=leave)
+
+
+def _scan_pair_task(args: tuple[object, ...]) -> CointegrationResult | None:
+    (
+        y_symbol,
+        x_symbol,
+        pair,
+        min_obs,
+        max_pvalue,
+        max_spread_adf_pvalue,
+    ) = args
+
+    if len(pair) < min_obs:
+        return None
+
+    try:
+        result = engle_granger_test(
+            pair[y_symbol],
+            pair[x_symbol],
+            y_symbol=y_symbol,
+            x_symbol=x_symbol,
+        )
+    except (ValueError, np.linalg.LinAlgError):
+        return None
+
+    if result.pvalue <= max_pvalue and result.spread_adf_pvalue <= max_spread_adf_pvalue:
+        return result
+    return None
+
+
+def _to_naive_datetime_index(index: pd.DatetimeIndex | pd.Series) -> pd.DatetimeIndex:
+    datetime_index = pd.DatetimeIndex(pd.to_datetime(index))
+    if datetime_index.tz is not None:
+        datetime_index = datetime_index.tz_convert("UTC").tz_localize(None)
+    return datetime_index
+
+
+def _get_optional_column(frame: pd.DataFrame | None, column: str) -> pd.Series | None:
+    if frame is None or frame.empty or column not in frame.columns:
+        return None
+    return frame[column]
+
+
+def _align_optional_rate(series: pd.Series | None, index: pd.Index) -> pd.Series:
+    if series is None:
+        return pd.Series(0.0, index=index)
+
+    funding_rate = pd.to_numeric(series, errors="coerce")
+    funding_rate.index = _to_naive_datetime_index(funding_rate.index)
+    aligned = funding_rate.groupby(level=0).last().reindex(index).fillna(0.0)
+    return aligned.astype(float)
 
 
 def _empty_pair_frame(include_sector: bool = False) -> pd.DataFrame:
