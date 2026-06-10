@@ -1,0 +1,67 @@
+<meta http-equiv=Content-Type content=text/html;charset=utf-8><div>
+	<table cellspacing="1" cellpadding="3" id="GridView1" style="background-color:White;border-color:White;border-width:2px;border-style:Ridge;">
+		<tr style="color:#E7E7FF;background-color:#4A3C8C;font-weight:bold;">
+			<th scope="col">學號</th><th scope="col">姓名</th><th scope="col">系所</th><th scope="col">年級</th><th scope="col">原始成績</th><th scope="col">GPA成績</th><th scope="col">學生狀態</th><th scope="col">EMail</th>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411121267</td><td>李雨萱</td><td>資工系</td><td>4</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411121267@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411136028</td><td>陳俊佐</td><td>財金系</td><td>4</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411136028@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411121265</td><td>楊栩函</td><td>資工系</td><td>4</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411121265@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411136025</td><td>陳昭安</td><td>財金系</td><td>4</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411136025@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>41113A022</td><td>簡宏霖</td><td>觀遊系</td><td>4</td><td>&nbsp;</td><td>W</td><td>[期中停修]</td><td>41113A022@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411236057</td><td>黃柏崴</td><td>財金系</td><td>3</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411236057@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411236023</td><td>林侑霆</td><td>財金系</td><td>3</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411236023@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411236022</td><td>鄭廷宸</td><td>財金系</td><td>3</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411236022@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411236006</td><td>鄭宇辰</td><td>財金系</td><td>3</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411236006@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411236002</td><td>王韋竣</td><td>財金系</td><td>3</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411236002@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411236005</td><td>鄭景睿</td><td>財金系</td><td>3</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411236005@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336001</td><td>陳奕如</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411336001@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336019</td><td>郭榮恩</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>【註*】</td><td>411336019@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336062</td><td>柯亦陽</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411336062@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336011</td><td>高苡寧</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411336011@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336017</td><td>郭洪愷</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>【註*】</td><td>411336017@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336004</td><td>劉芳孜</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411336004@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336043</td><td>張心田</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411336043@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336045</td><td>林欣慈</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411336045@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336021</td><td>楊盛凱</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411336021@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336035</td><td>譚君立</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>【註*】</td><td>411336035@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411236052</td><td>許奕翔</td><td>財金系</td><td>3</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411236052@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336039</td><td>張嘉洵</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411336039@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336020</td><td>劉育慈</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411336020@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336054</td><td>周勁廷</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411336054@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336064</td><td>周柏勳</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>[身心障礙生]</td><td>411336064@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411111220</td><td>劉育佑</td><td>應數系</td><td>4</td><td>&nbsp;</td><td>&nbsp;</td><td>[身心障礙生]</td><td>411111220@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411111211</td><td>洪凱倫</td><td>應數系</td><td>4</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411111211@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411042033</td><td>陳　樸</td><td>經濟系</td><td>5</td><td>&nbsp;</td><td>&nbsp;</td><td>【註*】</td><td>411042033@gms.ndhu.edu.tw</td>
+		</tr><tr style="color:Black;background-color:#DEDFDE;">
+			<td>411336018</td><td>施孋倫</td><td>財金系</td><td>2</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>411336018@gms.ndhu.edu.tw</td>
+		</tr>
+	</table>
+</div>

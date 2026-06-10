@@ -1,0 +1,12 @@
+{
+  "strategy_name": "tx_daytrade_day_session",
+  "source": "D:\\Github\\Personal-Project\\ndhu\\portfolio_management\\台指期當沖",
+  "feature_cache": "D:\\Github\\Personal-Project\\ndhu\\portfolio_management\\台指期當沖\\data\\tx_features.parquet",
+  "start": "2020-01-01",
+  "end": "2026-05-26",
+  "point_version": false,
+  "price_mode": "legacy_next_session",
+  "factor_mode": "legacy",
+  "equity_mode": "additive",
+  "session": "day"
+}

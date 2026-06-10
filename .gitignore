@@ -1,8 +1,11 @@
-/ndhu/portfolio_management/cointegration/data
+/ndhu/portfolio_management/cointegration/data/*
 /textual data analysis/data
 /textual data analysis/artifacts/models/best_model.pt
 /textual data analysis/artifacts/cache
 /投資組合競賽/data
+!/ndhu/portfolio_management/cointegration/data/cache/rolling_basis_pairs.parquet
+!/ndhu/portfolio_management/cointegration/data/cache/rolling_basis_pairs_metadata.json
+!/ndhu/portfolio_management/cointegration/data/cache/rolling_basis_pairs_progress.csv
 **/__pycache__/
 *.data
 *.pyc

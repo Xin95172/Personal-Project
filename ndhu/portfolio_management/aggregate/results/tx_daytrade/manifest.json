@@ -1,0 +1,9 @@
+{
+  "strategy_name": "tx_daytrade",
+  "files": {
+    "portfolio": "D:\\Github\\Personal-Project\\ndhu\\portfolio_management\\aggregate\\results\\tx_daytrade\\portfolio.parquet",
+    "backtest": "D:\\Github\\Personal-Project\\ndhu\\portfolio_management\\aggregate\\results\\tx_daytrade\\backtest.parquet",
+    "summary": "D:\\Github\\Personal-Project\\ndhu\\portfolio_management\\aggregate\\results\\tx_daytrade\\summary.csv",
+    "config": "D:\\Github\\Personal-Project\\ndhu\\portfolio_management\\aggregate\\results\\tx_daytrade\\config.json"
+  }
+}

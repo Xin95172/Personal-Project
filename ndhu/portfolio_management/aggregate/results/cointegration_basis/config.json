@@ -1,0 +1,11 @@
+{
+  "formation_window": "60D",
+  "trading_window": "30D",
+  "scan_step": "30D",
+  "prefilter_top_pairs_per_sector": 200,
+  "entry_z": 2.75,
+  "exit_z": 0.25,
+  "fee_rate": 0.0004,
+  "stop_loss_return": null,
+  "stop_loss_z": null
+}
