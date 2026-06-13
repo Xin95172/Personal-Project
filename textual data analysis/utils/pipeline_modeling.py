@@ -2,6 +2,7 @@ import os
 import re
 import shutil
 import subprocess
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -12,6 +13,11 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from sklearn.model_selection import train_test_split
 
 from algos.svm import SVMClassifier
+
+try:
+    from tqdm.auto import tqdm
+except Exception:
+    tqdm = None
 
 
 def check_mnir_runtime(require_textir=True):
@@ -105,6 +111,18 @@ def _load_mnir_functions():
 def _safe_slug(value):
     value = re.sub(r'[^A-Za-z0-9_.-]+', '_', str(value).strip().lower())
     return value.strip('_') or 'subset'
+
+
+def _batch_combinations(dataset_names, remove_leakage_values, representations, desc='Batch'):
+    combos = [
+        (dataset_name, remove_leakage, representation)
+        for dataset_name in dataset_names
+        for remove_leakage in remove_leakage_values
+        for representation in representations
+    ]
+    if tqdm is None:
+        return combos
+    return tqdm(combos, total=len(combos), desc=desc)
 
 
 def resolve_modeling_paths(
@@ -368,6 +386,133 @@ def apply_chi2_feature_selection(
     }
 
 
+def prepare_mnir_no_chi2_input(
+    no_chi2_data,
+    representation='bow',
+    feature_limit=None,
+    min_train_df=1,
+):
+    """
+    Keep Direct SVM no-chi-square inputs untouched, but optionally trim rare
+    columns before MNIR when the full DTM is too wide for textir::srproj.
+    """
+    representation = _safe_slug(str(representation).lower().replace('-', '_'))
+    if representation == 'tf_idf':
+        representation = 'tfidf'
+
+    x_train = no_chi2_data['x_train'].tocsc()
+    x_val = no_chi2_data['x_val'].tocsc()
+    x_test = no_chi2_data['x_test'].tocsc()
+    original_features = int(x_train.shape[1])
+    feature_limit = None if feature_limit is None else int(feature_limit)
+    min_train_df = int(min_train_df)
+
+    train_df = np.diff(x_train.indptr)
+    zero_train_features = int((train_df == 0).sum())
+    over_feature_limit = feature_limit is not None and original_features > feature_limit
+    should_filter = zero_train_features > 0 or over_feature_limit
+    if not should_filter:
+        summary = {
+            'mnir_no_chi2_lowfreq_filter_applied': False,
+            'mnir_no_chi2_feature_limit': feature_limit,
+            'mnir_no_chi2_min_train_df': min_train_df,
+            'mnir_no_chi2_original_features': original_features,
+            'mnir_no_chi2_selected_features': original_features,
+            'mnir_no_chi2_removed_features': 0,
+            'mnir_no_chi2_zero_train_features': zero_train_features,
+            'mnir_no_chi2_filter_reason': 'not_over_feature_limit',
+        }
+        return {
+            **no_chi2_data,
+            'feature_variant': representation,
+            'selected_feature_indices': None,
+            'mnir_filter_summary': summary,
+        }
+
+    keep_mask = train_df >= min_train_df
+    selected_feature_indices = np.flatnonzero(keep_mask)
+    filter_reason = f'train_df_gte_{min_train_df}'
+
+    if feature_limit is not None and selected_feature_indices.size > feature_limit:
+        # If a min-df trim is still too wide, keep the most frequent columns.
+        order = np.lexsort((selected_feature_indices, -train_df[selected_feature_indices]))
+        selected_feature_indices = np.sort(selected_feature_indices[order[:feature_limit]])
+        filter_reason = f'train_df_gte_{min_train_df}_then_top_{feature_limit}_by_train_df'
+
+    if selected_feature_indices.size == 0:
+        raise ValueError(
+            "MNIR no-chi-square low-frequency filter removed all features. "
+            f"Lower min_train_df; current min_train_df={min_train_df}."
+        )
+
+    selected_features = int(selected_feature_indices.size)
+    removed_features = int(original_features - selected_features)
+    suffix = f'mnir_min_df{min_train_df}'
+    if feature_limit is not None and selected_features == feature_limit:
+        suffix += f'_top{feature_limit}'
+    feature_variant = f'{representation}_no_chi2_{suffix}'
+    summary = {
+        'mnir_no_chi2_lowfreq_filter_applied': True,
+        'mnir_no_chi2_feature_limit': feature_limit,
+        'mnir_no_chi2_min_train_df': min_train_df,
+        'mnir_no_chi2_original_features': original_features,
+        'mnir_no_chi2_selected_features': selected_features,
+        'mnir_no_chi2_removed_features': removed_features,
+        'mnir_no_chi2_zero_train_features': zero_train_features,
+        'mnir_no_chi2_filter_reason': filter_reason,
+    }
+    print(
+        "[MNIR no-chi2] low-frequency filter applied: "
+        f"{original_features} -> {selected_features} features "
+        f"(removed {removed_features}; {filter_reason})"
+    )
+    return {
+        'x_train': x_train[:, selected_feature_indices],
+        'x_val': x_val[:, selected_feature_indices],
+        'x_test': x_test[:, selected_feature_indices],
+        'selector': None,
+        'selected_feature_indices': selected_feature_indices,
+        'feature_variant': feature_variant,
+        'summary': pd.DataFrame(
+            [{
+                'step': 'mnir_no_chi2_lowfreq_filter',
+                'original_features': original_features,
+                'selected_features': selected_features,
+                'removed_features': removed_features,
+                'feature_limit': feature_limit,
+                'min_train_df': min_train_df,
+                'filter_reason': filter_reason,
+            }]
+        ),
+        'mnir_filter_summary': summary,
+    }
+
+
+def _annotate_no_chi2_mnir_results(results, filter_summary):
+    metrics = results.get('test_metrics')
+    if metrics is not None and not metrics.empty:
+        for key, value in filter_summary.items():
+            metrics[key] = value
+    return results
+
+
+def _save_mnir_no_chi2_filter_artifacts(mnir_data, mnir_input):
+    output_dir = mnir_data.get('mnir_output_dir')
+    if not output_dir:
+        return
+    os.makedirs(output_dir, exist_ok=True)
+    selected = mnir_input.get('selected_feature_indices')
+    if selected is not None:
+        np.save(os.path.join(output_dir, 'mnir_no_chi2_selected_feature_indices.npy'), selected)
+    summary = mnir_input.get('mnir_filter_summary')
+    if summary is not None:
+        pd.DataFrame([summary]).to_csv(
+            os.path.join(output_dir, 'mnir_no_chi2_lowfreq_filter_summary.csv'),
+            index=False,
+            encoding='utf-8-sig',
+        )
+
+
 def run_mnir_feature_extraction(
     x_train,
     y_train,
@@ -406,6 +551,7 @@ def evaluate_svm_grid(
     z_test,
     y_test,
     svm_grid=None,
+    svm_class_weight=None,
     evaluate_test=True,
 ):
     """Tune SVM C on validation data, then optionally report final test metrics."""
@@ -415,7 +561,7 @@ def evaluate_svm_grid(
     validation_rows = []
 
     for c in svm_grid:
-        clf = SVMClassifier(C=c, max_iter=10000)
+        clf = SVMClassifier(C=c, max_iter=50000, class_weight=svm_class_weight)
         clf.fit(z_train, y_train)
         y_val_pred = clf.predict(z_val)
         val_accuracy = accuracy_score(y_val, y_val_pred)
@@ -425,7 +571,7 @@ def evaluate_svm_grid(
         )
         if val_macro_f1 > best_score:
             best_score = val_macro_f1
-            best_params = {'C': c, 'max_iter': 10000}
+            best_params = {'C': c, 'max_iter': 50000, 'class_weight': svm_class_weight}
 
     result = {
         'validation_results': pd.DataFrame(validation_rows),
@@ -539,6 +685,7 @@ def tune_chi2_k_with_direct_svm(
     x_test,
     k_values,
     svm_grid=None,
+    svm_class_weight=None,
     representation='bow',
 ):
     """
@@ -573,6 +720,7 @@ def tune_chi2_k_with_direct_svm(
             chi2_res['x_test'],
             None,
             svm_grid=svm_grid,
+            svm_class_weight=svm_class_weight,
             evaluate_test=False,
         )
 
@@ -623,6 +771,7 @@ def tune_chi2_k_with_validation(
     leakage_variant='with_leakage',
     mnir_features_folder='../artifacts/features/mnir',
     svm_grid=None,
+    svm_class_weight=None,
     representation='bow',
 ):
     """
@@ -668,6 +817,7 @@ def tune_chi2_k_with_validation(
             mnir_res['z_test'],
             None,
             svm_grid=svm_grid,
+            svm_class_weight=svm_class_weight,
             evaluate_test=False,
         )
 
@@ -953,6 +1103,9 @@ def run_step3_experiment(
     val_size=0.10,
     test_size=0.20,
     random_state=42,
+    svm_class_weight=None,
+    mnir_no_chi2_feature_limit=None,
+    mnir_no_chi2_min_train_df=1,
     features_folder='../artifacts/features/dtm',
     artifacts_folder='../artifacts/reports',
     mnir_features_folder='../artifacts/features/mnir',
@@ -1000,6 +1153,7 @@ def run_step3_experiment(
         leakage_variant=modeling_data['leakage_variant'],
         mnir_features_folder=mnir_features_folder,
         svm_grid=svm_c_grid,
+        svm_class_weight=svm_class_weight,
         representation=representation,
     )
 
@@ -1020,6 +1174,7 @@ def run_step3_experiment(
         mnir_data['z_test'],
         split_data['y_test'],
         svm_grid=svm_c_grid,
+        svm_class_weight=svm_class_weight,
         evaluate_test=True,
     )
 
@@ -1031,6 +1186,7 @@ def run_step3_experiment(
         split_data['x_test'],
         k_values=chi2_k_grid,
         svm_grid=svm_c_grid,
+        svm_class_weight=svm_class_weight,
         representation=representation,
     )
     direct_chi2_data = direct_svm_tuning['chi2']
@@ -1042,7 +1198,60 @@ def run_step3_experiment(
         direct_chi2_data['x_test'],
         split_data['y_test'],
         svm_grid=svm_c_grid,
+        svm_class_weight=svm_class_weight,
         evaluate_test=True,
+    )
+    no_chi2_data = apply_chi2_feature_selection(
+        split_data['x_train'],
+        split_data['y_train'],
+        split_data['x_val'],
+        split_data['x_test'],
+        k=None,
+        output_dir=None,
+        representation=representation,
+    )
+    no_chi2_svm_results = evaluate_svm_grid(
+        no_chi2_data['x_train'],
+        split_data['y_train'],
+        no_chi2_data['x_val'],
+        split_data['y_val'],
+        no_chi2_data['x_test'],
+        split_data['y_test'],
+        svm_grid=svm_c_grid,
+        svm_class_weight=svm_class_weight,
+        evaluate_test=True,
+    )
+    no_chi2_mnir_input = prepare_mnir_no_chi2_input(
+        no_chi2_data,
+        representation=representation,
+        feature_limit=mnir_no_chi2_feature_limit,
+        min_train_df=mnir_no_chi2_min_train_df,
+    )
+    no_chi2_mnir_data = run_mnir_feature_extraction(
+        no_chi2_mnir_input['x_train'],
+        split_data['y_train'],
+        no_chi2_mnir_input['x_val'],
+        no_chi2_mnir_input['x_test'],
+        dataset_slug=modeling_data['dataset_slug'],
+        leakage_variant=modeling_data['leakage_variant'],
+        feature_variant=no_chi2_mnir_input['feature_variant'],
+        mnir_features_folder=mnir_features_folder,
+    )
+    _save_mnir_no_chi2_filter_artifacts(no_chi2_mnir_data, no_chi2_mnir_input)
+    no_chi2_mnir_svm_results = evaluate_svm_grid(
+        no_chi2_mnir_data['z_train'],
+        split_data['y_train'],
+        no_chi2_mnir_data['z_val'],
+        split_data['y_val'],
+        no_chi2_mnir_data['z_test'],
+        split_data['y_test'],
+        svm_grid=svm_c_grid,
+        svm_class_weight=svm_class_weight,
+        evaluate_test=True,
+    )
+    no_chi2_mnir_svm_results = _annotate_no_chi2_mnir_results(
+        no_chi2_mnir_svm_results,
+        no_chi2_mnir_input['mnir_filter_summary'],
     )
 
     baseline_results = {
@@ -1051,6 +1260,8 @@ def run_step3_experiment(
             split_data['y_test'],
         ),
         f'{representation.upper()} + SVM': direct_svm_results,
+        f'{representation.upper()} + SVM (No Chi-square)': no_chi2_svm_results,
+        'Proposed MNIR + SVM (No Chi-square)': no_chi2_mnir_svm_results,
     }
     model_comparison = build_model_comparison(svm_results, baseline_results)
 
@@ -1078,10 +1289,14 @@ def run_step3_experiment(
         'random_state': random_state,
         'chi2_k_grid': chi2_k_grid,
         'svm_c_grid': svm_c_grid,
+        'svm_class_weight': svm_class_weight,
         'best_chi2_k': 'all' if best_chi2_k is None else best_chi2_k,
         'best_svm_c': svm_results['best_params']['C'],
         'best_direct_chi2_k': 'all' if direct_svm_tuning['best_k'] is None else direct_svm_tuning['best_k'],
         'best_direct_svm_c': direct_svm_results['best_params']['C'],
+        'no_chi2_svm_c': no_chi2_svm_results['best_params']['C'],
+        'no_chi2_mnir_svm_c': no_chi2_mnir_svm_results['best_params']['C'],
+        **no_chi2_mnir_input['mnir_filter_summary'],
         'direct_svm_tuning': 'independent_validation_macro_f1',
         'baseline_models': list(baseline_results.keys()),
     }
@@ -1114,7 +1329,264 @@ def run_step3_experiment(
         'direct_svm_tuning': direct_svm_tuning,
         'direct_chi2_data': direct_chi2_data,
         'direct_svm_results': direct_svm_results,
+        'no_chi2_data': no_chi2_data,
+        'no_chi2_svm_results': no_chi2_svm_results,
+        'no_chi2_mnir_input': no_chi2_mnir_input,
+        'no_chi2_mnir_data': no_chi2_mnir_data,
+        'no_chi2_mnir_svm_results': no_chi2_mnir_svm_results,
         'baseline_results': baseline_results,
+        'model_comparison': model_comparison,
+    }
+
+
+def _step3_output_dir(artifacts_folder, dataset_name, remove_leakage, representation, run_tag):
+    dataset_slug = _safe_slug(dataset_name) if dataset_name else 'all'
+    leakage_variant = 'no_leakage' if remove_leakage else 'with_leakage'
+    representation = _safe_slug(str(representation).lower().replace('-', '_'))
+    if representation == 'tf_idf':
+        representation = 'tfidf'
+    return os.path.join(
+        artifacts_folder,
+        dataset_slug,
+        leakage_variant,
+        representation,
+        'step3_runs',
+        run_tag,
+    )
+
+
+def _read_step3_run_config(output_dir):
+    path = os.path.join(output_dir, 'run_config.csv')
+    if not os.path.exists(path):
+        return {}
+    df = pd.read_csv(path, index_col=0)
+    return df.iloc[0].to_dict() if not df.empty else {}
+
+
+def _read_step3_model_comparison(output_dir):
+    path = os.path.join(output_dir, 'model_comparison.csv')
+    if not os.path.exists(path):
+        return None
+    return pd.read_csv(path, index_col=0)
+
+
+def _step3_required_model_names(representation):
+    representation = _safe_slug(str(representation).lower().replace('-', '_'))
+    if representation == 'tf_idf':
+        representation = 'tfidf'
+    rep = representation.upper()
+    return {
+        'Majority Class',
+        f'{rep} + SVM',
+        f'{rep} + SVM (No Chi-square)',
+        'Proposed MNIR + SVM',
+        'Proposed MNIR + SVM (No Chi-square)',
+    }
+
+
+def _model_metric_row(model_comparison, model_name):
+    if model_comparison is None or model_comparison.empty or 'Model' not in model_comparison.columns:
+        return {}
+    rows = model_comparison[model_comparison['Model'] == model_name]
+    return rows.iloc[0].to_dict() if not rows.empty else {}
+
+
+def _step3_summary_from_existing(output_dir, dataset_name, remove_leakage, representation, run_tag, status='skipped_existing'):
+    run_config = _read_step3_run_config(output_dir)
+    model_comparison = _read_step3_model_comparison(output_dir)
+    rep = _safe_slug(str(representation).lower().replace('-', '_'))
+    if rep == 'tf_idf':
+        rep = 'tfidf'
+
+    mnir = _model_metric_row(model_comparison, 'Proposed MNIR + SVM')
+    direct = _model_metric_row(model_comparison, f'{rep.upper()} + SVM')
+    no_chi2_direct = _model_metric_row(model_comparison, f'{rep.upper()} + SVM (No Chi-square)')
+    no_chi2_mnir = _model_metric_row(model_comparison, 'Proposed MNIR + SVM (No Chi-square)')
+
+    return {
+        **run_config,
+        'run_tag': run_config.get('run_tag', run_tag),
+        'dataset_name': run_config.get('dataset_name', dataset_name),
+        'dataset_slug': run_config.get('dataset_slug', _safe_slug(dataset_name)),
+        'remove_leakage': run_config.get('remove_leakage', remove_leakage),
+        'leakage_variant': run_config.get('leakage_variant', 'no_leakage' if remove_leakage else 'with_leakage'),
+        'representation': run_config.get('representation', rep),
+        'output_dir': output_dir,
+        'run_status': status,
+        'Test Accuracy': mnir.get('Test Accuracy'),
+        'Test Macro F1': mnir.get('Test Macro F1'),
+        'Direct SVM Independent Accuracy': direct.get('Test Accuracy'),
+        'Direct SVM Independent Macro F1': direct.get('Test Macro F1'),
+        'Direct SVM No Chi-square Accuracy': no_chi2_direct.get('Test Accuracy'),
+        'Direct SVM No Chi-square Macro F1': no_chi2_direct.get('Test Macro F1'),
+        'MNIR + SVM No Chi-square Accuracy': no_chi2_mnir.get('Test Accuracy'),
+        'MNIR + SVM No Chi-square Macro F1': no_chi2_mnir.get('Test Macro F1'),
+    }
+
+
+def patch_step3_no_chi2_results(
+    dataset_name,
+    remove_leakage,
+    representation='bow',
+    run_mode='full',
+    run_tag='full',
+    max_rows=None,
+    svm_c_grid=None,
+    train_size=0.70,
+    val_size=0.10,
+    test_size=0.20,
+    random_state=42,
+    svm_class_weight=None,
+    mnir_no_chi2_feature_limit=None,
+    mnir_no_chi2_min_train_df=1,
+    features_folder='../artifacts/features/dtm',
+    artifacts_folder='../artifacts/reports',
+    mnir_features_folder='../artifacts/features/mnir',
+    **_ignored,
+):
+    """Patch only no-chi-square Step 3 comparison rows into an existing run."""
+    representation = _safe_slug(str(representation).lower().replace('-', '_'))
+    if representation == 'tf_idf':
+        representation = 'tfidf'
+    svm_c_grid = svm_c_grid or [0.25, 1.0]
+
+    output_dir = _step3_output_dir(
+        artifacts_folder,
+        dataset_name,
+        remove_leakage,
+        representation,
+        run_tag,
+    )
+    model_comparison = _read_step3_model_comparison(output_dir)
+    if model_comparison is None or model_comparison.empty:
+        raise FileNotFoundError(f"Cannot patch no-chi-square rows without model_comparison.csv: {output_dir}")
+
+    modeling_data = load_modeling_data(
+        dataset_name=dataset_name,
+        remove_leakage=remove_leakage,
+        representation=representation,
+        features_folder=features_folder,
+        artifacts_folder=artifacts_folder,
+    )
+    sampled_data = stratified_sample_modeling_data(
+        modeling_data['x'],
+        modeling_data['y'],
+        max_rows=max_rows,
+        random_state=random_state,
+    )
+    split_data = split_modeling_data(
+        sampled_data['x'],
+        sampled_data['y'],
+        train_size=train_size,
+        val_size=val_size,
+        test_size=test_size,
+        random_state=random_state,
+        stratify=True,
+    )
+
+    no_chi2_data = apply_chi2_feature_selection(
+        split_data['x_train'],
+        split_data['y_train'],
+        split_data['x_val'],
+        split_data['x_test'],
+        k=None,
+        output_dir=None,
+        representation=representation,
+    )
+    no_chi2_svm_results = evaluate_svm_grid(
+        no_chi2_data['x_train'],
+        split_data['y_train'],
+        no_chi2_data['x_val'],
+        split_data['y_val'],
+        no_chi2_data['x_test'],
+        split_data['y_test'],
+        svm_grid=svm_c_grid,
+        svm_class_weight=svm_class_weight,
+        evaluate_test=True,
+    )
+    no_chi2_mnir_input = prepare_mnir_no_chi2_input(
+        no_chi2_data,
+        representation=representation,
+        feature_limit=mnir_no_chi2_feature_limit,
+        min_train_df=mnir_no_chi2_min_train_df,
+    )
+    no_chi2_mnir_data = run_mnir_feature_extraction(
+        no_chi2_mnir_input['x_train'],
+        split_data['y_train'],
+        no_chi2_mnir_input['x_val'],
+        no_chi2_mnir_input['x_test'],
+        dataset_slug=modeling_data['dataset_slug'],
+        leakage_variant=modeling_data['leakage_variant'],
+        feature_variant=no_chi2_mnir_input['feature_variant'],
+        mnir_features_folder=mnir_features_folder,
+    )
+    _save_mnir_no_chi2_filter_artifacts(no_chi2_mnir_data, no_chi2_mnir_input)
+    no_chi2_mnir_svm_results = evaluate_svm_grid(
+        no_chi2_mnir_data['z_train'],
+        split_data['y_train'],
+        no_chi2_mnir_data['z_val'],
+        split_data['y_val'],
+        no_chi2_mnir_data['z_test'],
+        split_data['y_test'],
+        svm_grid=svm_c_grid,
+        svm_class_weight=svm_class_weight,
+        evaluate_test=True,
+    )
+    no_chi2_mnir_svm_results = _annotate_no_chi2_mnir_results(
+        no_chi2_mnir_svm_results,
+        no_chi2_mnir_input['mnir_filter_summary'],
+    )
+
+    new_rows = []
+    for model_name, result in {
+        f'{representation.upper()} + SVM (No Chi-square)': no_chi2_svm_results,
+        'Proposed MNIR + SVM (No Chi-square)': no_chi2_mnir_svm_results,
+    }.items():
+        metrics = result.get('test_metrics')
+        if metrics is not None and not metrics.empty:
+            row = metrics.iloc[0].to_dict()
+            row['Model'] = model_name
+            new_rows.append(row)
+
+    remove_models = {row['Model'] for row in new_rows}
+    model_comparison = model_comparison[~model_comparison['Model'].isin(remove_models)]
+    model_comparison = pd.concat([model_comparison, pd.DataFrame(new_rows)], ignore_index=True)
+
+    run_config = _read_step3_run_config(output_dir)
+    run_config.update({
+        'run_mode': run_config.get('run_mode', run_mode),
+        'run_tag': run_config.get('run_tag', run_tag),
+        'dataset_name': run_config.get('dataset_name', dataset_name),
+        'dataset_slug': run_config.get('dataset_slug', modeling_data['dataset_slug']),
+        'remove_leakage': run_config.get('remove_leakage', remove_leakage),
+        'leakage_variant': run_config.get('leakage_variant', modeling_data['leakage_variant']),
+        'representation': run_config.get('representation', representation),
+        'svm_class_weight': run_config.get('svm_class_weight', svm_class_weight),
+        'no_chi2_svm_c': no_chi2_svm_results['best_params']['C'],
+        'no_chi2_mnir_svm_c': no_chi2_mnir_svm_results['best_params']['C'],
+        **no_chi2_mnir_input['mnir_filter_summary'],
+        'no_chi2_patch_run_mode': run_mode,
+        'no_chi2_patch_run_tag': run_tag,
+    })
+
+    saved_paths = save_step3_artifacts(
+        output_dir=output_dir,
+        run_config=run_config,
+        baseline_results={
+            f'{representation.upper()} + SVM (No Chi-square)': no_chi2_svm_results,
+            'Proposed MNIR + SVM (No Chi-square)': no_chi2_mnir_svm_results,
+        },
+        model_comparison=model_comparison,
+    )
+    return {
+        'run_config': run_config,
+        'output_dir': output_dir,
+        'saved_paths': saved_paths,
+        'no_chi2_data': no_chi2_data,
+        'no_chi2_svm_results': no_chi2_svm_results,
+        'no_chi2_mnir_input': no_chi2_mnir_input,
+        'no_chi2_mnir_data': no_chi2_mnir_data,
+        'no_chi2_mnir_svm_results': no_chi2_mnir_svm_results,
         'model_comparison': model_comparison,
     }
 
@@ -1125,21 +1597,66 @@ def run_step3_batch(
     representations,
     run_mode='quick',
     run_tag=None,
+    skip_existing=True,
+    patch_missing_no_chi2=True,
+    allow_new_runs=True,
     **kwargs,
 ):
     """Run Step 3 over dataset x leakage x representation combinations."""
     results = []
     failures = []
     run_tag = run_tag or run_mode
-    for dataset_name in dataset_names:
-        for remove_leakage in remove_leakage_values:
-            for representation in representations:
-                try:
+
+    for dataset_name, remove_leakage, representation in _batch_combinations(
+        dataset_names,
+        remove_leakage_values,
+        representations,
+        desc='Step 3 batch',
+    ):
+        try:
+            output_dir = _step3_output_dir(
+                kwargs.get('artifacts_folder', '../artifacts/reports'),
+                dataset_name,
+                remove_leakage,
+                representation,
+                run_tag,
+            )
+            existing_comparison = _read_step3_model_comparison(output_dir)
+            if skip_existing and existing_comparison is not None and 'Model' in existing_comparison.columns:
+                existing_models = set(existing_comparison['Model'].astype(str))
+                required_models = _step3_required_model_names(representation)
+                if required_models.issubset(existing_models):
                     print(
-                        f"[Step3] {dataset_name} / "
+                        f"[Step3 skip] {dataset_name} / "
                         f"{'no_leakage' if remove_leakage else 'with_leakage'} / {representation}"
                     )
-                    result = run_step3_experiment(
+                    results.append(
+                        _step3_summary_from_existing(
+                            output_dir,
+                            dataset_name,
+                            remove_leakage,
+                            representation,
+                            run_tag,
+                            status='skipped_existing',
+                        )
+                    )
+                    continue
+
+                rep_slug = _safe_slug(str(representation).lower().replace('-', '_'))
+                if rep_slug == 'tf_idf':
+                    rep_slug = 'tfidf'
+                no_chi2_models = {
+                    f'{rep_slug.upper()} + SVM (No Chi-square)',
+                    'Proposed MNIR + SVM (No Chi-square)',
+                }
+                missing_no_chi2 = no_chi2_models - existing_models
+                base_models = required_models - no_chi2_models
+                if patch_missing_no_chi2 and missing_no_chi2 and base_models.issubset(existing_models):
+                    print(
+                        f"[Step3 patch no-chi2] {dataset_name} / "
+                        f"{'no_leakage' if remove_leakage else 'with_leakage'} / {representation}"
+                    )
+                    patch_step3_no_chi2_results(
                         dataset_name=dataset_name,
                         remove_leakage=remove_leakage,
                         representation=representation,
@@ -1147,23 +1664,84 @@ def run_step3_batch(
                         run_tag=run_tag,
                         **kwargs,
                     )
-                    metrics = result['svm_results']['test_metrics'].iloc[0].to_dict()
-                    direct_metrics = result['direct_svm_results']['test_metrics'].iloc[0].to_dict()
-                    results.append({
-                        **result['run_config'],
-                        'output_dir': result['output_dir'],
-                        'Test Accuracy': metrics.get('Test Accuracy'),
-                        'Test Macro F1': metrics.get('Test Macro F1'),
-                        'Direct SVM Independent Accuracy': direct_metrics.get('Test Accuracy'),
-                        'Direct SVM Independent Macro F1': direct_metrics.get('Test Macro F1'),
-                    })
-                except Exception as exc:
-                    failures.append({
-                        'dataset_name': dataset_name,
-                        'remove_leakage': remove_leakage,
-                        'representation': representation,
-                        'error': repr(exc),
-                    })
+                    results.append(
+                        _step3_summary_from_existing(
+                            output_dir,
+                            dataset_name,
+                            remove_leakage,
+                            representation,
+                            run_tag,
+                            status='patched_no_chi2',
+                        )
+                    )
+                    continue
+
+                if not allow_new_runs:
+                    print(
+                        f"[Step3 skip incomplete] {dataset_name} / "
+                        f"{'no_leakage' if remove_leakage else 'with_leakage'} / {representation}"
+                    )
+                    results.append(
+                        _step3_summary_from_existing(
+                            output_dir,
+                            dataset_name,
+                            remove_leakage,
+                            representation,
+                            run_tag,
+                            status='skipped_incomplete_existing',
+                        )
+                    )
+                    continue
+
+            if not allow_new_runs:
+                print(
+                    f"[Step3 skip no existing run] {dataset_name} / "
+                    f"{'no_leakage' if remove_leakage else 'with_leakage'} / {representation}"
+                )
+                failures.append({
+                    'dataset_name': dataset_name,
+                    'remove_leakage': remove_leakage,
+                    'representation': representation,
+                    'error': 'Skipped because allow_new_runs=False and no complete reusable Step 3 run exists.',
+                })
+                continue
+
+            print(
+                f"[Step3] {dataset_name} / "
+                f"{'no_leakage' if remove_leakage else 'with_leakage'} / {representation}"
+            )
+            result = run_step3_experiment(
+                dataset_name=dataset_name,
+                remove_leakage=remove_leakage,
+                representation=representation,
+                run_mode=run_mode,
+                run_tag=run_tag,
+                **kwargs,
+            )
+            metrics = result['svm_results']['test_metrics'].iloc[0].to_dict()
+            direct_metrics = result['direct_svm_results']['test_metrics'].iloc[0].to_dict()
+            no_chi2_metrics = result['no_chi2_svm_results']['test_metrics'].iloc[0].to_dict()
+            no_chi2_mnir_metrics = result['no_chi2_mnir_svm_results']['test_metrics'].iloc[0].to_dict()
+            results.append({
+                **result['run_config'],
+                'output_dir': result['output_dir'],
+                'run_status': 'ran_full',
+                'Test Accuracy': metrics.get('Test Accuracy'),
+                'Test Macro F1': metrics.get('Test Macro F1'),
+                'Direct SVM Independent Accuracy': direct_metrics.get('Test Accuracy'),
+                'Direct SVM Independent Macro F1': direct_metrics.get('Test Macro F1'),
+                'Direct SVM No Chi-square Accuracy': no_chi2_metrics.get('Test Accuracy'),
+                'Direct SVM No Chi-square Macro F1': no_chi2_metrics.get('Test Macro F1'),
+                'MNIR + SVM No Chi-square Accuracy': no_chi2_mnir_metrics.get('Test Accuracy'),
+                'MNIR + SVM No Chi-square Macro F1': no_chi2_mnir_metrics.get('Test Macro F1'),
+            })
+        except Exception as exc:
+            failures.append({
+                'dataset_name': dataset_name,
+                'remove_leakage': remove_leakage,
+                'representation': representation,
+                'error': repr(exc),
+            })
 
     summary_df = pd.DataFrame(results)
     failures_df = pd.DataFrame(failures)
@@ -1171,7 +1749,6 @@ def run_step3_batch(
         'summary_df': summary_df,
         'failures_df': failures_df,
     }
-
 
 def run_direct_svm_experiment(
     dataset_name,
@@ -1186,6 +1763,7 @@ def run_direct_svm_experiment(
     val_size=0.10,
     test_size=0.20,
     random_state=42,
+    svm_class_weight=None,
     features_folder='../artifacts/features/dtm',
     artifacts_folder='../artifacts/reports',
     include_dataset_summary=True,
@@ -1229,10 +1807,12 @@ def run_direct_svm_experiment(
         split_data['x_test'],
         k_values=chi2_k_grid,
         svm_grid=svm_c_grid,
+        svm_class_weight=svm_class_weight,
         representation=representation,
     )
     chi2_data = chi2_tuning['chi2']
     best_chi2_k = chi2_tuning['best_k']
+    direct_svm_tuning = chi2_tuning
 
     output_dir = os.path.join(
         artifacts_folder,
@@ -1254,6 +1834,7 @@ def run_direct_svm_experiment(
         chi2_data['x_test'],
         split_data['y_test'],
         svm_grid=svm_c_grid,
+        svm_class_weight=svm_class_weight,
         evaluate_test=True,
     )
     baseline_results = {
@@ -1285,6 +1866,7 @@ def run_direct_svm_experiment(
         'random_state': random_state,
         'chi2_k_grid': chi2_k_grid,
         'svm_c_grid': svm_c_grid,
+        'svm_class_weight': svm_class_weight,
         'best_direct_chi2_k': 'all' if best_chi2_k is None else best_chi2_k,
         'best_direct_svm_c': direct_svm_results['best_params']['C'],
         'model_name': direct_model_name,
@@ -1331,42 +1913,44 @@ def run_direct_svm_batch(
     results = []
     failures = []
     run_tag = run_tag or run_mode
-    for dataset_name in dataset_names:
-        for remove_leakage in remove_leakage_values:
-            for representation in representations:
-                try:
-                    print(
-                        f"[Step4 Direct SVM] {dataset_name} / "
-                        f"{'no_leakage' if remove_leakage else 'with_leakage'} / {representation}"
-                    )
-                    result = run_direct_svm_experiment(
-                        dataset_name=dataset_name,
-                        remove_leakage=remove_leakage,
-                        representation=representation,
-                        run_mode=run_mode,
-                        run_tag=run_tag,
-                        **kwargs,
-                    )
-                    metrics = result['direct_svm_results']['test_metrics'].iloc[0].to_dict()
-                    results.append({
-                        **result['run_config'],
-                        'output_dir': result['output_dir'],
-                        'Test Accuracy': metrics.get('Test Accuracy'),
-                        'Test Macro F1': metrics.get('Test Macro F1'),
-                    })
-                except Exception as exc:
-                    failures.append({
-                        'dataset_name': dataset_name,
-                        'remove_leakage': remove_leakage,
-                        'representation': representation,
-                        'error': repr(exc),
-                    })
+    for dataset_name, remove_leakage, representation in _batch_combinations(
+        dataset_names,
+        remove_leakage_values,
+        representations,
+        desc='Direct SVM batch',
+    ):
+        try:
+            print(
+                f"[Step4 Direct SVM] {dataset_name} / "
+                f"{'no_leakage' if remove_leakage else 'with_leakage'} / {representation}"
+            )
+            result = run_direct_svm_experiment(
+                dataset_name=dataset_name,
+                remove_leakage=remove_leakage,
+                representation=representation,
+                run_mode=run_mode,
+                run_tag=run_tag,
+                **kwargs,
+            )
+            metrics = result['direct_svm_results']['test_metrics'].iloc[0].to_dict()
+            results.append({
+                **result['run_config'],
+                'output_dir': result['output_dir'],
+                'Test Accuracy': metrics.get('Test Accuracy'),
+                'Test Macro F1': metrics.get('Test Macro F1'),
+            })
+        except Exception as exc:
+            failures.append({
+                'dataset_name': dataset_name,
+                'remove_leakage': remove_leakage,
+                'representation': representation,
+                'error': repr(exc),
+            })
 
     return {
         'summary_df': pd.DataFrame(results),
         'failures_df': pd.DataFrame(failures),
     }
-
 
 def patch_step3_direct_svm_baseline(
     dataset_name,
@@ -1381,6 +1965,7 @@ def patch_step3_direct_svm_baseline(
     val_size=0.10,
     test_size=0.20,
     random_state=42,
+    svm_class_weight=None,
     features_folder='../artifacts/features/dtm',
     artifacts_folder='../artifacts/reports',
 ):
@@ -1439,6 +2024,7 @@ def patch_step3_direct_svm_baseline(
         split_data['x_test'],
         k_values=chi2_k_grid,
         svm_grid=svm_c_grid,
+        svm_class_weight=svm_class_weight,
         representation=representation,
     )
     direct_chi2_data = direct_svm_tuning['chi2']
@@ -1450,6 +2036,7 @@ def patch_step3_direct_svm_baseline(
         direct_chi2_data['x_test'],
         split_data['y_test'],
         svm_grid=svm_c_grid,
+        svm_class_weight=svm_class_weight,
         evaluate_test=True,
     )
     majority_results = evaluate_majority_baseline(split_data['y_train'], split_data['y_test'])
@@ -1481,6 +2068,7 @@ def patch_step3_direct_svm_baseline(
             'direct_svm_tuning': 'independent_validation_macro_f1',
             'best_direct_chi2_k': 'all' if direct_svm_tuning['best_k'] is None else direct_svm_tuning['best_k'],
             'best_direct_svm_c': direct_svm_results['best_params']['C'],
+            'svm_class_weight': run_config.get('svm_class_weight', svm_class_weight),
             'direct_svm_patch_run_mode': run_mode,
             'direct_svm_patch_run_tag': run_tag,
             'direct_svm_patch_max_rows': max_rows,
@@ -1518,40 +2106,417 @@ def patch_step3_direct_svm_batch(
     """Patch Direct SVM baselines for existing Step 3 run folders."""
     results = []
     failures = []
-    for dataset_name in dataset_names:
-        for remove_leakage in remove_leakage_values:
-            for representation in representations:
-                try:
-                    print(
-                        f"[Patch Direct SVM] {dataset_name} / "
-                        f"{'no_leakage' if remove_leakage else 'with_leakage'} / {representation}"
-                    )
-                    result = patch_step3_direct_svm_baseline(
-                        dataset_name=dataset_name,
-                        remove_leakage=remove_leakage,
-                        representation=representation,
-                        run_mode=run_mode,
-                        run_tag=run_tag,
-                        **kwargs,
-                    )
-                    metrics = result['direct_svm_results']['test_metrics'].iloc[0].to_dict()
-                    results.append({
-                        **result['run_config'],
-                        'output_dir': result['output_dir'],
-                        'Direct SVM Independent Accuracy': metrics.get('Test Accuracy'),
-                        'Direct SVM Independent Macro F1': metrics.get('Test Macro F1'),
-                    })
-                except Exception as exc:
-                    failures.append({
-                        'dataset_name': dataset_name,
-                        'remove_leakage': remove_leakage,
-                        'representation': representation,
-                        'error': repr(exc),
-                    })
+    for dataset_name, remove_leakage, representation in _batch_combinations(
+        dataset_names,
+        remove_leakage_values,
+        representations,
+        desc='Patch Direct SVM batch',
+    ):
+        try:
+            print(
+                f"[Patch Direct SVM] {dataset_name} / "
+                f"{'no_leakage' if remove_leakage else 'with_leakage'} / {representation}"
+            )
+            result = patch_step3_direct_svm_baseline(
+                dataset_name=dataset_name,
+                remove_leakage=remove_leakage,
+                representation=representation,
+                run_mode=run_mode,
+                run_tag=run_tag,
+                **kwargs,
+            )
+            metrics = result['direct_svm_results']['test_metrics'].iloc[0].to_dict()
+            results.append({
+                **result['run_config'],
+                'output_dir': result['output_dir'],
+                'Direct SVM Independent Accuracy': metrics.get('Test Accuracy'),
+                'Direct SVM Independent Macro F1': metrics.get('Test Macro F1'),
+            })
+        except Exception as exc:
+            failures.append({
+                'dataset_name': dataset_name,
+                'remove_leakage': remove_leakage,
+                'representation': representation,
+                'error': repr(exc),
+            })
 
     return {
         'summary_df': pd.DataFrame(results),
         'failures_df': pd.DataFrame(failures),
+    }
+
+
+def _load_vocab_for_modeling_data(modeling_data, representation):
+    vocab_file = {
+        'bow': 'vocab_BoW.npy',
+        'tf': 'vocab_TF.npy',
+        'tfidf': 'vocab_TF_IDF.npy',
+    }[representation]
+    vocab_path = Path(modeling_data['dtm_path']).parent / vocab_file
+    if not vocab_path.exists():
+        return None
+    vocab = np.load(vocab_path, allow_pickle=True).astype(str)
+    if len(vocab) != modeling_data['x'].shape[1]:
+        return None
+    return vocab
+
+
+def preview_original_dtm(
+    dataset_name,
+    remove_leakage=False,
+    representation='tfidf',
+    features_folder='../artifacts/features/dtm',
+    artifacts_folder='../artifacts/reports',
+    n_docs=5,
+    top_terms_per_doc=20,
+):
+    """Return a long-format preview of nonzero full-DTM values before chi-square."""
+    representation = _safe_slug(str(representation).lower().replace('-', '_'))
+    if representation == 'tf_idf':
+        representation = 'tfidf'
+    modeling_data = load_modeling_data(
+        dataset_name=dataset_name,
+        remove_leakage=remove_leakage,
+        representation=representation,
+        features_folder=features_folder,
+        artifacts_folder=artifacts_folder,
+    )
+    paths = resolve_modeling_paths(
+        dataset_name=dataset_name,
+        remove_leakage=remove_leakage,
+        features_folder=features_folder,
+        artifacts_folder=artifacts_folder,
+    )
+    labels = pd.read_excel(paths['verdict_results_path'], index_col=0)
+    doc_ids = labels.index.to_numpy()
+    vocab = _load_vocab_for_modeling_data(modeling_data, representation)
+    x = modeling_data['x'].tocsr()
+
+    rows = []
+    for doc_position in range(min(int(n_docs), x.shape[0])):
+        row = x.getrow(doc_position)
+        order = np.argsort(row.data)[::-1][:int(top_terms_per_doc)]
+        for pos in order:
+            feature_index = int(row.indices[pos])
+            rows.append({
+                'dataset': dataset_name,
+                'leakage': modeling_data['leakage_variant'],
+                'representation': representation,
+                'doc_position': doc_position,
+                'doc_id': doc_ids[doc_position],
+                'label': modeling_data['y'][doc_position],
+                'feature_index': feature_index,
+                'term': vocab[feature_index] if vocab is not None else f'feature_{feature_index}',
+                'value': float(row.data[pos]),
+                'vocab_available': vocab is not None,
+            })
+    return pd.DataFrame(rows)
+
+
+def preview_original_dtm_matrix(
+    dataset_name,
+    remove_leakage=False,
+    representation='tfidf',
+    features_folder='../artifacts/features/dtm',
+    artifacts_folder='../artifacts/reports',
+    n_docs=8,
+    n_terms=30,
+    column_mode='nonzero',
+):
+    """Return a small document-by-term matrix preview before chi-square."""
+    representation = _safe_slug(str(representation).lower().replace('-', '_'))
+    if representation == 'tf_idf':
+        representation = 'tfidf'
+    if column_mode not in {'nonzero', 'first'}:
+        raise ValueError("column_mode must be 'nonzero' or 'first'.")
+    modeling_data = load_modeling_data(
+        dataset_name=dataset_name,
+        remove_leakage=remove_leakage,
+        representation=representation,
+        features_folder=features_folder,
+        artifacts_folder=artifacts_folder,
+    )
+    paths = resolve_modeling_paths(
+        dataset_name=dataset_name,
+        remove_leakage=remove_leakage,
+        features_folder=features_folder,
+        artifacts_folder=artifacts_folder,
+    )
+    labels = pd.read_excel(paths['verdict_results_path'], index_col=0)
+    doc_ids = labels.index.to_numpy()
+    vocab = _load_vocab_for_modeling_data(modeling_data, representation)
+    x = modeling_data['x'].tocsr()
+    n_docs = min(int(n_docs), x.shape[0])
+    n_terms = min(int(n_terms), x.shape[1])
+    x_rows = x[:n_docs]
+    if column_mode == 'first':
+        selected_cols = np.arange(n_terms)
+    else:
+        selected_cols = np.unique(x_rows.indices)[:n_terms]
+        if len(selected_cols) == 0:
+            selected_cols = np.arange(n_terms)
+    column_names = [str(vocab[i]) if vocab is not None else f'feature_{int(i)}' for i in selected_cols]
+    df = pd.DataFrame(x_rows[:, selected_cols].toarray(), columns=column_names)
+    df.insert(0, 'label', modeling_data['y'][:n_docs])
+    df.insert(0, 'doc_id', doc_ids[:n_docs])
+    df.insert(0, 'doc_position', np.arange(n_docs))
+    df.attrs['dtm_shape'] = x.shape
+    df.attrs['selected_feature_indices'] = selected_cols.tolist()
+    df.attrs['vocab_available'] = vocab is not None
+    return df
+
+
+def preview_dtm_before_after_chi2(
+    dataset_name,
+    remove_leakage=False,
+    representation='tfidf',
+    k=3000,
+    features_folder='../artifacts/features/dtm',
+    artifacts_folder='../artifacts/reports',
+    train_size=0.70,
+    val_size=0.10,
+    test_size=0.20,
+    random_state=42,
+    split='train',
+    n_docs=8,
+    samples_per_label=None,
+    label_order=None,
+    n_terms=30,
+    column_mode='nonzero',
+):
+    """Return DTM matrix previews for the same sampled documents before/after chi-square."""
+    representation = _safe_slug(str(representation).lower().replace('-', '_'))
+    if representation == 'tf_idf':
+        representation = 'tfidf'
+    if split not in {'train', 'validation', 'test'}:
+        raise ValueError("split must be one of: train, validation, test.")
+    if column_mode not in {'nonzero', 'first'}:
+        raise ValueError("column_mode must be 'nonzero' or 'first'.")
+
+    modeling_data = load_modeling_data(
+        dataset_name=dataset_name,
+        remove_leakage=remove_leakage,
+        representation=representation,
+        features_folder=features_folder,
+        artifacts_folder=artifacts_folder,
+    )
+    paths = resolve_modeling_paths(
+        dataset_name=dataset_name,
+        remove_leakage=remove_leakage,
+        features_folder=features_folder,
+        artifacts_folder=artifacts_folder,
+    )
+    labels = pd.read_excel(paths['verdict_results_path'], index_col=0)
+    doc_ids = labels.index.to_numpy()
+    vocab = _load_vocab_for_modeling_data(modeling_data, representation)
+    x = modeling_data['x'].tocsr()
+    y = np.asarray(modeling_data['y']).ravel()
+
+    indices = np.arange(x.shape[0])
+    train_idx, temp_idx, y_train, y_temp = train_test_split(
+        indices, y, train_size=train_size, random_state=random_state, stratify=y
+    )
+    relative_test_size = test_size / (val_size + test_size)
+    val_idx, test_idx, _, _ = train_test_split(
+        temp_idx, y_temp, test_size=relative_test_size, random_state=random_state, stratify=y_temp
+    )
+    split_indices = {'train': train_idx, 'validation': val_idx, 'test': test_idx}
+    all_row_indices = split_indices[split]
+    split_labels = y[all_row_indices]
+    if samples_per_label is not None:
+        rng = np.random.default_rng(random_state)
+        positions = []
+        labels_to_sample = list(label_order) if label_order is not None else sorted(pd.unique(split_labels))
+        for label in labels_to_sample:
+            label_positions = np.flatnonzero(split_labels == label)
+            if len(label_positions):
+                take = min(int(samples_per_label), len(label_positions))
+                positions.extend(rng.choice(label_positions, size=take, replace=False).tolist())
+        split_positions = np.asarray(positions, dtype=int)
+    else:
+        split_positions = np.arange(min(int(n_docs), len(all_row_indices)))
+    row_indices = all_row_indices[split_positions]
+
+    x_train, x_val, x_test = x[train_idx], x[val_idx], x[test_idx]
+    chi2_res = apply_chi2_feature_selection(
+        x_train, y[train_idx], x_val, x_test, k=k, output_dir=None, representation=representation
+    )
+    after_matrix = {'train': chi2_res['x_train'], 'validation': chi2_res['x_val'], 'test': chi2_res['x_test']}[split].tocsr()
+    selected_feature_indices = chi2_res['selected_feature_indices']
+    if selected_feature_indices is None:
+        selected_feature_indices = np.arange(x.shape[1])
+
+    def feature_names(feature_indices):
+        return [str(vocab[i]) if vocab is not None else f'feature_{int(i)}' for i in feature_indices]
+
+    def matrix_preview(matrix, matrix_positions, original_rows, feature_indices):
+        matrix_rows = matrix[matrix_positions]
+        col_count = min(int(n_terms), len(feature_indices))
+        if column_mode == 'first':
+            local_cols = np.arange(col_count)
+        else:
+            local_cols = np.unique(matrix_rows.indices)[:col_count]
+            if len(local_cols) == 0:
+                local_cols = np.arange(col_count)
+        df = pd.DataFrame(
+            matrix_rows[:, local_cols].toarray(),
+            columns=[feature_names(feature_indices)[i] for i in local_cols],
+        )
+        df.insert(0, 'label', y[original_rows])
+        df.insert(0, 'doc_id', doc_ids[original_rows])
+        df.insert(0, 'original_row', original_rows)
+        return df, [int(feature_indices[i]) for i in local_cols]
+
+    before_df, before_features = matrix_preview(x, row_indices, row_indices, np.arange(x.shape[1]))
+    after_df, after_features = matrix_preview(after_matrix, split_positions, row_indices, selected_feature_indices)
+    summary_df = pd.DataFrame([{
+        'dataset': dataset_name,
+        'leakage': modeling_data['leakage_variant'],
+        'representation': representation,
+        'split': split,
+        'chi2_k': 'all' if k is None else int(k),
+        'original_dtm_shape': x.shape,
+        'preview_rows': len(row_indices),
+        'samples_per_label': samples_per_label,
+        'before_preview_shape': before_df.shape,
+        'after_chi2_shape': after_matrix.shape,
+        'after_preview_shape': after_df.shape,
+        'selected_features': int(chi2_res['summary'].iloc[0]['selected_features']),
+        'vocab_available': vocab is not None,
+    }])
+    return {
+        'summary_df': summary_df,
+        'before_chi2_df': before_df,
+        'after_chi2_df': after_df,
+        'before_visible_feature_indices': before_features,
+        'after_visible_feature_indices': after_features,
+        'chi2_summary_df': chi2_res['summary'],
+    }
+
+
+def build_dtm_chi2_diagnostic(
+    dataset_names,
+    remove_leakage_values,
+    representations,
+    run_tag=None,
+    features_folder='../artifacts/features/dtm',
+    artifacts_folder='../artifacts/reports',
+    train_size=0.70,
+    val_size=0.10,
+    test_size=0.20,
+    random_state=42,
+    split_representation='tfidf',
+):
+    """Summarize original DTM shapes and saved chi-square tuning coverage."""
+    artifacts_root = Path(artifacts_folder)
+    if run_tag is None:
+        batch_dirs = sorted((artifacts_root / 'step3_batch_runs').glob('*'), key=lambda p: p.stat().st_mtime, reverse=True)
+        run_tag = batch_dirs[0].name if batch_dirs else None
+
+    dtm_rows = []
+    for dataset_name in dataset_names:
+        for remove_leakage in remove_leakage_values:
+            leakage = 'no_leakage' if remove_leakage else 'with_leakage'
+            for representation in representations:
+                data = load_modeling_data(
+                    dataset_name=dataset_name,
+                    remove_leakage=remove_leakage,
+                    representation=representation,
+                    features_folder=features_folder,
+                    artifacts_folder=artifacts_folder,
+                )
+                x = data['x']
+                dtm_rows.append({
+                    'dataset': dataset_name,
+                    'leakage': leakage,
+                    'representation': representation,
+                    'docs': x.shape[0],
+                    'original_terms': x.shape[1],
+                    'nonzero_values': x.nnz,
+                    'density_pct': round((x.nnz / (x.shape[0] * x.shape[1]) * 100) if x.shape[0] * x.shape[1] else 0, 4),
+                    'dtm_path': data['dtm_path'],
+                })
+    dtm_shape_df = pd.DataFrame(dtm_rows)
+
+    split_rows = []
+    for dataset_name in dataset_names:
+        for remove_leakage in remove_leakage_values:
+            leakage = 'no_leakage' if remove_leakage else 'with_leakage'
+            data = load_modeling_data(
+                dataset_name=dataset_name,
+                remove_leakage=remove_leakage,
+                representation=split_representation,
+                features_folder=features_folder,
+                artifacts_folder=artifacts_folder,
+            )
+            split_data = split_modeling_data(
+                data['x'], data['y'], train_size=train_size, val_size=val_size,
+                test_size=test_size, random_state=random_state, stratify=True
+            )
+            for _, row in split_data['split_summary'].iterrows():
+                split_rows.append({
+                    'dataset': dataset_name,
+                    'leakage': leakage,
+                    'split': row['split'],
+                    'rows': int(row['rows']),
+                    'features_before_chi2': int(row['features']),
+                })
+    split_shape_df = pd.DataFrame(split_rows)
+
+    tuning_files = list(artifacts_root.rglob('*chi2*k*tuning_summary.csv'))
+    files_with_no_chi2 = []
+    for path in tuning_files:
+        try:
+            df = pd.read_csv(path)
+        except Exception:
+            continue
+        if 'K' in df.columns and df['K'].astype(str).str.lower().isin(['all', 'none']).any():
+            files_with_no_chi2.append(path)
+
+    run_rows = []
+    if run_tag is not None:
+        for dataset_name in dataset_names:
+            for remove_leakage in remove_leakage_values:
+                leakage = 'no_leakage' if remove_leakage else 'with_leakage'
+                for representation in representations:
+                    run_dir = artifacts_root / dataset_name / leakage / representation / 'step3_runs' / run_tag
+                    for result_type, filename in [
+                        ('MNIR + SVM chi2 tuning', 'chi2_k_tuning_summary.csv'),
+                        ('Direct SVM chi2 tuning', 'direct_svm_chi2_k_tuning_summary.csv'),
+                    ]:
+                        path = run_dir / filename
+                        if not path.exists():
+                            continue
+                        df = pd.read_csv(path)
+                        k_values = df['K'].astype(str).tolist() if 'K' in df.columns else []
+                        best = df.iloc[0] if not df.empty else pd.Series(dtype=object)
+                        run_rows.append({
+                            'run_tag': run_tag,
+                            'dataset': dataset_name,
+                            'leakage': leakage,
+                            'representation': representation,
+                            'result_type': result_type,
+                            'has_no_chi2_candidate': any(str(k).lower() in ['all', 'none'] for k in k_values),
+                            'k_candidates': ', '.join(k_values),
+                            'best_k': best.get('K'),
+                            'best_selected_features': best.get('Selected Features'),
+                            'best_feature_variant': best.get('Feature Variant'),
+                            'best_validation_macro_f1': best.get('Validation Macro F1'),
+                        })
+    run_chi2_check_df = pd.DataFrame(run_rows)
+    return {
+        'run_tag': run_tag,
+        'dtm_shape_df': dtm_shape_df,
+        'split_shape_df': split_shape_df,
+        'no_chi2_files_df': pd.DataFrame({'path': [str(p) for p in files_with_no_chi2]}),
+        'run_chi2_check_df': run_chi2_check_df,
+        'summary': {
+            'tuning_files_scanned': len(tuning_files),
+            'files_with_no_chi2_candidate': len(files_with_no_chi2),
+            'selected_run_has_no_chi2_candidate': (
+                bool(run_chi2_check_df['has_no_chi2_candidate'].any()) if not run_chi2_check_df.empty else False
+            ),
+        },
     }
 
 

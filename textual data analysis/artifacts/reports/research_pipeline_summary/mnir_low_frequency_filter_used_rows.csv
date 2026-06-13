@@ -1,0 +1,4 @@
+﻿dataset,leakage,feature,original features,selected features,removed features,filter reason,Test Macro F1
+administrative_win_lose_mixed,with_leakage,bow,22144.0,21350.0,794.0,train_df_gte_1,0.31471334009958
+administrative_win_lose_mixed,with_leakage,tf,22144.0,21350.0,794.0,train_df_gte_1,0.3113518605746585
+administrative_win_lose_mixed,with_leakage,tfidf,22144.0,21350.0,794.0,train_df_gte_1,0.3106704438149197

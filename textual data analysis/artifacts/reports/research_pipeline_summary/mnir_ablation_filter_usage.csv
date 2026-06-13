@@ -1,0 +1,25 @@
+﻿dataset,leakage,feature,MNIR + SVM without chi-square ran,low-frequency filter applied,original features,selected features,removed features,filter reason,Test Macro F1
+administrative_win_lose_mixed,no_leakage,bow,yes,no / not recorded,,,,,0.3184937241353386
+administrative_win_lose_mixed,no_leakage,tf,yes,no / not recorded,,,,,0.3113518605746585
+administrative_win_lose_mixed,no_leakage,tfidf,yes,no / not recorded,,,,,0.3111844172164624
+administrative_win_lose_mixed,with_leakage,bow,yes,yes,22144.0,21350.0,794.0,train_df_gte_1,0.31471334009958
+administrative_win_lose_mixed,with_leakage,tf,yes,yes,22144.0,21350.0,794.0,train_df_gte_1,0.3113518605746585
+administrative_win_lose_mixed,with_leakage,tfidf,yes,yes,22144.0,21350.0,794.0,train_df_gte_1,0.3106704438149197
+civil_win_lose_mixed,no_leakage,bow,yes,no / not recorded,,,,,0.3419182551726423
+civil_win_lose_mixed,no_leakage,tf,yes,no / not recorded,,,,,0.2959005376344086
+civil_win_lose_mixed,no_leakage,tfidf,yes,no / not recorded,,,,,0.2965761228038616
+civil_win_lose_mixed,with_leakage,bow,yes,no / not recorded,,,,,0.3562335864011841
+civil_win_lose_mixed,with_leakage,tf,yes,no / not recorded,,,,,0.2877956115447483
+civil_win_lose_mixed,with_leakage,tfidf,yes,no / not recorded,,,,,0.3005907751949808
+criminal_win_lose_mixed,no_leakage,bow,yes,no / not recorded,,,,,0.3732518648485035
+criminal_win_lose_mixed,no_leakage,tf,yes,no / not recorded,,,,,0.3444949430434071
+criminal_win_lose_mixed,no_leakage,tfidf,yes,no / not recorded,,,,,0.3718861607393
+criminal_win_lose_mixed,with_leakage,bow,yes,no / not recorded,,,,,0.367092591874312
+criminal_win_lose_mixed,with_leakage,tf,yes,no / not recorded,,,,,0.3585787223587446
+criminal_win_lose_mixed,with_leakage,tfidf,yes,no / not recorded,,,,,0.3717334414166315
+cwc_win_lose_mixed,no_leakage,bow,yes,no / not recorded,,,,,0.5441303677507906
+cwc_win_lose_mixed,no_leakage,tf,yes,no / not recorded,,,,,0.5431433949205331
+cwc_win_lose_mixed,no_leakage,tfidf,yes,no / not recorded,,,,,0.5391032296001192
+cwc_win_lose_mixed,with_leakage,bow,yes,no / not recorded,,,,,0.5646772821198492
+cwc_win_lose_mixed,with_leakage,tf,yes,no / not recorded,,,,,0.5632627925204344
+cwc_win_lose_mixed,with_leakage,tfidf,yes,no / not recorded,,,,,0.5602058242952515

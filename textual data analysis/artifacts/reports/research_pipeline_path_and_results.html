@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>研究流程路徑與結果整理</title>
+  <style>
+    :root { --bg:#f6f7f9; --paper:#fff; --ink:#20242b; --muted:#667085; --line:#d8dee8; --head:#1f2937; --accent:#1f7a8c; --code-bg:#f0f3f7; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font-family:"Microsoft JhengHei","Noto Sans TC","PingFang TC",Arial,sans-serif; line-height:1.65; font-size:16px; }
+    .page { max-width:1180px; margin:32px auto; padding:42px 54px; background:var(--paper); border:1px solid var(--line); border-radius:10px; box-shadow:0 12px 34px rgba(15,23,42,.08); }
+    h1,h2,h3 { color:var(--head); line-height:1.28; letter-spacing:0; }
+    h1 { margin:0 0 22px; font-size:34px; border-bottom:3px solid var(--accent); padding-bottom:14px; }
+    h2 { margin-top:36px; font-size:25px; border-bottom:1px solid var(--line); padding-bottom:8px; }
+    h3 { margin-top:28px; font-size:20px; }
+    p { margin:12px 0; }
+    code { font-family:Consolas,"Cascadia Mono",monospace; background:var(--code-bg); border-radius:4px; padding:.12em .35em; font-size:.94em; }
+    pre { overflow-x:auto; background:#101828; color:#eef2ff; border-radius:8px; padding:16px 18px; line-height:1.55; }
+    pre code { background:transparent; padding:0; color:inherit; }
+    table { width:100%; border-collapse:collapse; margin:18px 0 26px; font-size:14px; display:block; overflow-x:auto; white-space:nowrap; }
+    th,td { border:1px solid var(--line); padding:8px 10px; vertical-align:top; }
+    th { background:#eef3f8; color:#1f2937; font-weight:700; text-align:left; }
+    tr:nth-child(even) td { background:#fbfcfe; }
+    ul { padding-left:1.4em; }
+    .mermaid { margin:18px 0 26px; padding:18px; background:#fbfcfe; border:1px solid var(--line); border-radius:8px; overflow-x:auto; }
+    .note { margin-top:36px; color:var(--muted); font-size:13px; border-top:1px solid var(--line); padding-top:12px; }
+    @media print { body { background:#fff; } .page { margin:0; max-width:none; border:0; box-shadow:none; border-radius:0; } table { white-space:normal; display:table; font-size:12px; } }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>document.addEventListener('DOMContentLoaded', () => mermaid.initialize({ startOnLoad:true, theme:'default' }));</script>
+</head>
+<body>
+  <main class="page">
+<h1 id="_1">研究流程路徑與結果整理</h1>
+<p>本文件整理目前文字分類研究從文字特徵到測試結果的完整流程，並分別說明訓練集、驗證集與測試集在各模型路徑中的處理方式。所有數值皆來自既有 full run artifacts，沒有重新訓練模型。</p>
+<h2 id="1">1. 整體研究流程</h2>
+<div class="mermaid">
+flowchart LR
+    A[判決全文與標籤] --> B[文字清理與 CKIP 斷詞]
+    B --> C1[保留結果詞語料 with_leakage]
+    B --> C2[移除結果詞語料 no_leakage]
+    C1 --> D[DTM: BoW / TF / TF-IDF]
+    C2 --> D
+    D --> E[切分訓練集 / 驗證集 / 測試集]
+    E --> F1[Direct SVM: DTM -> 卡方 K -> SVM]
+    E --> F2[Direct SVM: DTM -> SVM]
+    E --> G1[MNIR + SVM: DTM -> 卡方 K -> MNIR z -> SVM]
+    E --> G2[MNIR + SVM: DTM -> MNIR z -> SVM]
+    F1 --> H[Test Accuracy / Macro F1 / 混淆矩陣]
+    F2 --> H
+    G1 --> H
+    G2 --> H
+</div>
+<h2 id="2">2. 訓練集、驗證集、測試集各自經過哪些步驟</h2>
+<p>重點不是只有 70 / 10 / 20 的比例，而是所有會學到參數的步驟都只在訓練集上 fit。驗證集與測試集只能使用訓練集已經 fit 好的 selector、MNIR model 或 SVM model。</p>
+<table>
+<thead>
+<tr>
+<th>步驟</th>
+<th>訓練集</th>
+<th>驗證集</th>
+<th>測試集</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DTM 列切分</td>
+<td>從完整 sparse DTM 中取出訓練列，形成 <code>x_train</code></td>
+<td>使用相同 DTM 欄位，只取驗證列</td>
+<td>使用相同 DTM 欄位，只取測試列</td>
+</tr>
+<tr>
+<td>卡方特徵選擇（若該路徑有卡方）</td>
+<td>用 <code>x_train</code> 與 <code>y_train</code> fit <code>SelectKBest(chi2, k)</code></td>
+<td>用訓練集 fit 好的 selector 保留相同欄位</td>
+<td>用訓練集 fit 好的 selector 保留相同欄位</td>
+</tr>
+<tr>
+<td>MNIR 投影（若該路徑有 MNIR）</td>
+<td>用訓練矩陣與 <code>y_train</code> fit MNIR model</td>
+<td>用已 fit 的 MNIR model 將驗證矩陣投影成 z 特徵</td>
+<td>用已 fit 的 MNIR model 將測試矩陣投影成 z 特徵</td>
+</tr>
+<tr>
+<td>SVM 調參</td>
+<td>對每個候選 C，以訓練特徵訓練 SVM</td>
+<td>用 Validation Macro F1 選 best C；有卡方時也用驗證集選 K</td>
+<td>不參與調參</td>
+</tr>
+<tr>
+<td>最終評估</td>
+<td>不作為最終報告分數</td>
+<td>只用於模型與參數選擇</td>
+<td>輸出最終 Accuracy、Macro F1、classification report、confusion matrix</td>
+</tr>
+</tbody>
+</table>
+<h2 id="3">3. 詳細模型路徑</h2>
+<h3 id="31-direct-svmdtm-svm">3.1 Direct SVM：DTM -&gt; 卡方 -&gt; SVM</h3>
+<p>訓練集：</p>
+<pre><code class="language-text">x_train: DTM_train
+  -&gt; 用 (x_train, y_train) fit 卡方 selector
+  -&gt; x_train_chi2 = selector.fit_transform(x_train, y_train)
+  -&gt; 用 x_train_chi2 訓練各個候選 C 的 SVM
+</code></pre>
+<p>驗證集：</p>
+<pre><code class="language-text">x_val: DTM_validation
+  -&gt; x_val_chi2 = fitted_selector.transform(x_val)
+  -&gt; 用各個候選 SVM 預測
+  -&gt; 依 Validation Macro F1 選 best chi-square K 與 best SVM C
+</code></pre>
+<p>測試集：</p>
+<pre><code class="language-text">x_test: DTM_test
+  -&gt; x_test_chi2 = fitted_selector.transform(x_test)
+  -&gt; 用選定的 SVM 預測
+  -&gt; 計算 Test Accuracy / Test Macro F1 / report / confusion matrix
+</code></pre>
+<h3 id="32-direct-svmdtm-svm">3.2 Direct SVM：DTM -&gt; SVM</h3>
+<pre><code class="language-text">訓練集：x_train DTM -&gt; 訓練各個候選 C 的 SVM
+驗證集：x_val DTM   -&gt; 依 Validation Macro F1 選 best C
+測試集：x_test DTM  -&gt; 用選定的 SVM 預測並計算測試指標
+</code></pre>
+<h3 id="33-mnir-svmdtm-mnir-z-svm">3.3 MNIR + SVM：DTM -&gt; 卡方 -&gt; MNIR z -&gt; SVM</h3>
+<p>訓練集：</p>
+<pre><code class="language-text">x_train: DTM_train
+  -&gt; 用 (x_train, y_train) fit 卡方 selector
+  -&gt; x_train_chi2
+  -&gt; 用 (x_train_chi2, y_train) fit MNIR model
+  -&gt; z_train = MNIR projection of x_train_chi2
+  -&gt; 用 z_train 訓練各個候選 C 的 SVM
+</code></pre>
+<p>驗證集：</p>
+<pre><code class="language-text">x_val: DTM_validation
+  -&gt; x_val_chi2 = fitted_selector.transform(x_val)
+  -&gt; z_val = fitted_MNIR_model.project(x_val_chi2)
+  -&gt; 依 Validation Macro F1 選 best chi-square K 與 best C
+</code></pre>
+<p>測試集：</p>
+<pre><code class="language-text">x_test: DTM_test
+  -&gt; x_test_chi2 = fitted_selector.transform(x_test)
+  -&gt; z_test = fitted_MNIR_model.project(x_test_chi2)
+  -&gt; 用選定的 SVM 預測並計算測試指標
+</code></pre>
+<h3 id="34-mnir-svmdtm-mnir-z-svm">3.4 MNIR + SVM：DTM -&gt; MNIR z -&gt; SVM</h3>
+<pre><code class="language-text">訓練集：x_train DTM -&gt; fit MNIR -&gt; z_train -&gt; 訓練 SVM
+驗證集：x_val DTM   -&gt; fitted MNIR projection -&gt; z_val -&gt; 選 best C
+測試集：x_test DTM  -&gt; fitted MNIR projection -&gt; z_test -&gt; 計算最終測試指標
+</code></pre>
+<h2 id="4">4. 矩陣形狀</h2>
+<h3 id="41-dtm">4.1 原始 DTM 形狀</h3>
+<p>DTM 是 sparse document-term matrix。列代表判決文件，欄代表詞彙特徵。BoW、TF、TF-IDF 在同一資料集與同一語料版本下形狀相同，但格子裡的值不同。</p>
+<p><code>nnz</code> 是 sparse matrix 裡非零值的數量。DTM 大部分格子都是 0，所以只儲存非零格。例如某篇判決有 200 個詞彙特徵的值不是 0，這些格子就會計入 <code>nnz</code>。<code>矩陣密度 = nnz / (列數 x 欄數)</code>。</p>
+<table>
+<thead>
+<tr>
+<th>資料集</th>
+<th>語料版本</th>
+<th>特徵表示</th>
+<th style="text-align: right;">DTM 形狀</th>
+<th style="text-align: right;">非零值數量 nnz</th>
+<th style="text-align: right;">矩陣密度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>行政</td>
+<td>移除結果詞</td>
+<td>BoW</td>
+<td style="text-align: right;">11,310 x 21,428</td>
+<td style="text-align: right;">740,220</td>
+<td style="text-align: right;">0.3054%</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>移除結果詞</td>
+<td>TF</td>
+<td style="text-align: right;">11,310 x 21,428</td>
+<td style="text-align: right;">740,220</td>
+<td style="text-align: right;">0.3054%</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>移除結果詞</td>
+<td>TF-IDF</td>
+<td style="text-align: right;">11,310 x 21,428</td>
+<td style="text-align: right;">740,220</td>
+<td style="text-align: right;">0.3054%</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>保留結果詞</td>
+<td>BoW</td>
+<td style="text-align: right;">11,310 x 22,144</td>
+<td style="text-align: right;">780,599</td>
+<td style="text-align: right;">0.3117%</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>保留結果詞</td>
+<td>TF</td>
+<td style="text-align: right;">11,310 x 22,144</td>
+<td style="text-align: right;">780,599</td>
+<td style="text-align: right;">0.3117%</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>保留結果詞</td>
+<td>TF-IDF</td>
+<td style="text-align: right;">11,310 x 22,144</td>
+<td style="text-align: right;">780,599</td>
+<td style="text-align: right;">0.3117%</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>移除結果詞</td>
+<td>BoW</td>
+<td style="text-align: right;">5,660 x 24,425</td>
+<td style="text-align: right;">681,384</td>
+<td style="text-align: right;">0.4929%</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>移除結果詞</td>
+<td>TF</td>
+<td style="text-align: right;">5,660 x 24,425</td>
+<td style="text-align: right;">681,384</td>
+<td style="text-align: right;">0.4929%</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>移除結果詞</td>
+<td>TF-IDF</td>
+<td style="text-align: right;">5,660 x 24,425</td>
+<td style="text-align: right;">681,384</td>
+<td style="text-align: right;">0.4929%</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>保留結果詞</td>
+<td>BoW</td>
+<td style="text-align: right;">5,660 x 25,173</td>
+<td style="text-align: right;">730,862</td>
+<td style="text-align: right;">0.5130%</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>保留結果詞</td>
+<td>TF</td>
+<td style="text-align: right;">5,660 x 25,173</td>
+<td style="text-align: right;">730,862</td>
+<td style="text-align: right;">0.5130%</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>保留結果詞</td>
+<td>TF-IDF</td>
+<td style="text-align: right;">5,660 x 25,173</td>
+<td style="text-align: right;">730,862</td>
+<td style="text-align: right;">0.5130%</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>移除結果詞</td>
+<td>BoW</td>
+<td style="text-align: right;">26,131 x 38,159</td>
+<td style="text-align: right;">2,203,537</td>
+<td style="text-align: right;">0.2210%</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>移除結果詞</td>
+<td>TF</td>
+<td style="text-align: right;">26,131 x 38,159</td>
+<td style="text-align: right;">2,203,537</td>
+<td style="text-align: right;">0.2210%</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>移除結果詞</td>
+<td>TF-IDF</td>
+<td style="text-align: right;">26,131 x 38,159</td>
+<td style="text-align: right;">2,203,537</td>
+<td style="text-align: right;">0.2210%</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>保留結果詞</td>
+<td>BoW</td>
+<td style="text-align: right;">26,131 x 38,896</td>
+<td style="text-align: right;">2,241,689</td>
+<td style="text-align: right;">0.2206%</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>保留結果詞</td>
+<td>TF</td>
+<td style="text-align: right;">26,131 x 38,896</td>
+<td style="text-align: right;">2,241,689</td>
+<td style="text-align: right;">0.2206%</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>保留結果詞</td>
+<td>TF-IDF</td>
+<td style="text-align: right;">26,131 x 38,896</td>
+<td style="text-align: right;">2,241,689</td>
+<td style="text-align: right;">0.2206%</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>移除結果詞</td>
+<td>BoW</td>
+<td style="text-align: right;">1,807 x 5,773</td>
+<td style="text-align: right;">148,052</td>
+<td style="text-align: right;">1.4192%</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>移除結果詞</td>
+<td>TF</td>
+<td style="text-align: right;">1,807 x 5,773</td>
+<td style="text-align: right;">148,052</td>
+<td style="text-align: right;">1.4192%</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>移除結果詞</td>
+<td>TF-IDF</td>
+<td style="text-align: right;">1,807 x 5,773</td>
+<td style="text-align: right;">148,052</td>
+<td style="text-align: right;">1.4192%</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>保留結果詞</td>
+<td>BoW</td>
+<td style="text-align: right;">1,807 x 5,912</td>
+<td style="text-align: right;">164,155</td>
+<td style="text-align: right;">1.5366%</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>保留結果詞</td>
+<td>TF</td>
+<td style="text-align: right;">1,807 x 5,912</td>
+<td style="text-align: right;">164,155</td>
+<td style="text-align: right;">1.5366%</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>保留結果詞</td>
+<td>TF-IDF</td>
+<td style="text-align: right;">1,807 x 5,912</td>
+<td style="text-align: right;">164,155</td>
+<td style="text-align: right;">1.5366%</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-mnir">4.2 移除結果詞版本：切分、卡方與 MNIR 後的形狀</h3>
+<p><code>MNIR z 訓練集</code> 是 DTM 經 MNIR 投影後的矩陣。在這些 run 中，它都是 <code>訓練筆數 x 2</code>，因為 <code>textir::srproj</code> 對已 fit 的 MNIR model 產生了 2 個 sufficient-reduction score columns。這 2 欄是壓縮後的 MNIR 特徵，給後面的 SVM 使用；它不是 2 個 label，也不是 2 個類別。</p>
+<table>
+<thead>
+<tr>
+<th>資料集</th>
+<th>特徵表示</th>
+<th style="text-align: right;">原始 DTM</th>
+<th style="text-align: right;">訓練集</th>
+<th style="text-align: right;">驗證集</th>
+<th style="text-align: right;">測試集</th>
+<th style="text-align: right;">MNIR 路徑卡方 K</th>
+<th style="text-align: right;">MNIR 路徑卡方後 DTM</th>
+<th style="text-align: right;">MNIR z 訓練集</th>
+<th style="text-align: right;">Direct SVM 路徑卡方 K</th>
+<th style="text-align: right;">Direct SVM 卡方後 DTM</th>
+<th style="text-align: right;">MNIR z 訓練集（DTM -&gt; MNIR）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>行政</td>
+<td>BoW</td>
+<td style="text-align: right;">11,310 x 21,428</td>
+<td style="text-align: right;">7,916 x 21,428</td>
+<td style="text-align: right;">1,131 x 21,428</td>
+<td style="text-align: right;">2,263 x 21,428</td>
+<td style="text-align: right;">5,000</td>
+<td style="text-align: right;">7,916 x 5,000</td>
+<td style="text-align: right;">7,916 x 2</td>
+<td style="text-align: right;">3,000</td>
+<td style="text-align: right;">7,916 x 3,000</td>
+<td style="text-align: right;">7,916 x 2</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>TF</td>
+<td style="text-align: right;">11,310 x 21,428</td>
+<td style="text-align: right;">7,916 x 21,428</td>
+<td style="text-align: right;">1,131 x 21,428</td>
+<td style="text-align: right;">2,263 x 21,428</td>
+<td style="text-align: right;">1,000</td>
+<td style="text-align: right;">7,916 x 1,000</td>
+<td style="text-align: right;">7,916 x 2</td>
+<td style="text-align: right;">3,000</td>
+<td style="text-align: right;">7,916 x 3,000</td>
+<td style="text-align: right;">7,916 x 2</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>TF-IDF</td>
+<td style="text-align: right;">11,310 x 21,428</td>
+<td style="text-align: right;">7,916 x 21,428</td>
+<td style="text-align: right;">1,131 x 21,428</td>
+<td style="text-align: right;">2,263 x 21,428</td>
+<td style="text-align: right;">5,000</td>
+<td style="text-align: right;">7,916 x 5,000</td>
+<td style="text-align: right;">7,916 x 2</td>
+<td style="text-align: right;">3,000</td>
+<td style="text-align: right;">7,916 x 3,000</td>
+<td style="text-align: right;">7,916 x 2</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>BoW</td>
+<td style="text-align: right;">5,660 x 24,425</td>
+<td style="text-align: right;">3,961 x 24,425</td>
+<td style="text-align: right;">566 x 24,425</td>
+<td style="text-align: right;">1,133 x 24,425</td>
+<td style="text-align: right;">10,000</td>
+<td style="text-align: right;">3,961 x 10,000</td>
+<td style="text-align: right;">3,961 x 2</td>
+<td style="text-align: right;">10,000</td>
+<td style="text-align: right;">3,961 x 10,000</td>
+<td style="text-align: right;">3,961 x 2</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>TF</td>
+<td style="text-align: right;">5,660 x 24,425</td>
+<td style="text-align: right;">3,961 x 24,425</td>
+<td style="text-align: right;">566 x 24,425</td>
+<td style="text-align: right;">1,133 x 24,425</td>
+<td style="text-align: right;">1,000</td>
+<td style="text-align: right;">3,961 x 1,000</td>
+<td style="text-align: right;">3,961 x 2</td>
+<td style="text-align: right;">3,000</td>
+<td style="text-align: right;">3,961 x 3,000</td>
+<td style="text-align: right;">3,961 x 2</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>TF-IDF</td>
+<td style="text-align: right;">5,660 x 24,425</td>
+<td style="text-align: right;">3,961 x 24,425</td>
+<td style="text-align: right;">566 x 24,425</td>
+<td style="text-align: right;">1,133 x 24,425</td>
+<td style="text-align: right;">1,000</td>
+<td style="text-align: right;">3,961 x 1,000</td>
+<td style="text-align: right;">3,961 x 2</td>
+<td style="text-align: right;">5,000</td>
+<td style="text-align: right;">3,961 x 5,000</td>
+<td style="text-align: right;">3,961 x 2</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>BoW</td>
+<td style="text-align: right;">26,131 x 38,159</td>
+<td style="text-align: right;">18,291 x 38,159</td>
+<td style="text-align: right;">2,613 x 38,159</td>
+<td style="text-align: right;">5,227 x 38,159</td>
+<td style="text-align: right;">10,000</td>
+<td style="text-align: right;">18,291 x 10,000</td>
+<td style="text-align: right;">18,291 x 2</td>
+<td style="text-align: right;">1,000</td>
+<td style="text-align: right;">18,291 x 1,000</td>
+<td style="text-align: right;">18,291 x 2</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>TF</td>
+<td style="text-align: right;">26,131 x 38,159</td>
+<td style="text-align: right;">18,291 x 38,159</td>
+<td style="text-align: right;">2,613 x 38,159</td>
+<td style="text-align: right;">5,227 x 38,159</td>
+<td style="text-align: right;">1,000</td>
+<td style="text-align: right;">18,291 x 1,000</td>
+<td style="text-align: right;">18,291 x 2</td>
+<td style="text-align: right;">5,000</td>
+<td style="text-align: right;">18,291 x 5,000</td>
+<td style="text-align: right;">18,291 x 2</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>TF-IDF</td>
+<td style="text-align: right;">26,131 x 38,159</td>
+<td style="text-align: right;">18,291 x 38,159</td>
+<td style="text-align: right;">2,613 x 38,159</td>
+<td style="text-align: right;">5,227 x 38,159</td>
+<td style="text-align: right;">5,000</td>
+<td style="text-align: right;">18,291 x 5,000</td>
+<td style="text-align: right;">18,291 x 2</td>
+<td style="text-align: right;">1,000</td>
+<td style="text-align: right;">18,291 x 1,000</td>
+<td style="text-align: right;">18,291 x 2</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>BoW</td>
+<td style="text-align: right;">1,807 x 5,773</td>
+<td style="text-align: right;">1,264 x 5,773</td>
+<td style="text-align: right;">181 x 5,773</td>
+<td style="text-align: right;">362 x 5,773</td>
+<td style="text-align: right;">3,000</td>
+<td style="text-align: right;">1,264 x 3,000</td>
+<td style="text-align: right;">1,264 x 2</td>
+<td style="text-align: right;">3,000</td>
+<td style="text-align: right;">1,264 x 3,000</td>
+<td style="text-align: right;">1,264 x 2</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>TF</td>
+<td style="text-align: right;">1,807 x 5,773</td>
+<td style="text-align: right;">1,264 x 5,773</td>
+<td style="text-align: right;">181 x 5,773</td>
+<td style="text-align: right;">362 x 5,773</td>
+<td style="text-align: right;">1,000</td>
+<td style="text-align: right;">1,264 x 1,000</td>
+<td style="text-align: right;">1,264 x 2</td>
+<td style="text-align: right;">3,000</td>
+<td style="text-align: right;">1,264 x 3,000</td>
+<td style="text-align: right;">1,264 x 2</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>TF-IDF</td>
+<td style="text-align: right;">1,807 x 5,773</td>
+<td style="text-align: right;">1,264 x 5,773</td>
+<td style="text-align: right;">181 x 5,773</td>
+<td style="text-align: right;">362 x 5,773</td>
+<td style="text-align: right;">3,000</td>
+<td style="text-align: right;">1,264 x 3,000</td>
+<td style="text-align: right;">1,264 x 2</td>
+<td style="text-align: right;">5,000</td>
+<td style="text-align: right;">1,264 x 5,000</td>
+<td style="text-align: right;">1,264 x 2</td>
+</tr>
+</tbody>
+</table>
+<h2 id="5-test-macro-f1">5. 主要結果：移除結果詞版本 / Test Macro F1</h2>
+<p>移除結果詞版本較適合作為論文主結果，因為它先移除裁判結果提示詞，再進行特徵萃取。</p>
+<p><code>Macro F1 差值</code> 的計算方式如下：</p>
+<pre><code class="language-text">Macro F1 差值 = Macro F1(DTM -&gt; 模型) - Macro F1(DTM -&gt; 卡方 -&gt; 模型)
+</code></pre>
+<p>正值代表 <code>DTM -&gt; 模型</code> 路徑的 Macro F1 較高；負值代表 <code>DTM -&gt; 卡方 -&gt; 模型</code> 路徑的 Macro F1 較高。</p>
+<p>在這張表中，若模型是 <code>Proposed MNIR + SVM</code>，則 <code>DTM -&gt; 模型</code> 代表 <code>DTM -&gt; MNIR z -&gt; SVM</code>；<code>DTM -&gt; 卡方 -&gt; 模型</code> 代表 <code>DTM -&gt; 卡方 -&gt; MNIR z -&gt; SVM</code>。</p>
+<table>
+<thead>
+<tr>
+<th>資料集</th>
+<th>特徵表示</th>
+<th>模型</th>
+<th style="text-align: right;">DTM -&gt; 卡方 -&gt; 模型</th>
+<th style="text-align: right;">DTM -&gt; 模型</th>
+<th style="text-align: right;">Macro F1 差值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>行政</td>
+<td>BoW</td>
+<td>BOW + SVM</td>
+<td style="text-align: right;">0.3805</td>
+<td style="text-align: right;">0.4047</td>
+<td style="text-align: right;">0.0242</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>BoW</td>
+<td>Proposed MNIR + SVM</td>
+<td style="text-align: right;">0.3184</td>
+<td style="text-align: right;">0.3185</td>
+<td style="text-align: right;">0.0001</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>TF</td>
+<td>Proposed MNIR + SVM</td>
+<td style="text-align: right;">0.3114</td>
+<td style="text-align: right;">0.3114</td>
+<td style="text-align: right;">0.0000</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>TF</td>
+<td>TF + SVM</td>
+<td style="text-align: right;">0.3412</td>
+<td style="text-align: right;">0.3427</td>
+<td style="text-align: right;">0.0015</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>TF-IDF</td>
+<td>Proposed MNIR + SVM</td>
+<td style="text-align: right;">0.3109</td>
+<td style="text-align: right;">0.3112</td>
+<td style="text-align: right;">0.0003</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>TF-IDF</td>
+<td>TFIDF + SVM</td>
+<td style="text-align: right;">0.3753</td>
+<td style="text-align: right;">0.3894</td>
+<td style="text-align: right;">0.0141</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>BoW</td>
+<td>BOW + SVM</td>
+<td style="text-align: right;">0.4028</td>
+<td style="text-align: right;">0.4164</td>
+<td style="text-align: right;">0.0136</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>BoW</td>
+<td>Proposed MNIR + SVM</td>
+<td style="text-align: right;">0.3358</td>
+<td style="text-align: right;">0.3419</td>
+<td style="text-align: right;">0.0061</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>TF</td>
+<td>Proposed MNIR + SVM</td>
+<td style="text-align: right;">0.3202</td>
+<td style="text-align: right;">0.2959</td>
+<td style="text-align: right;">-0.0243</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>TF</td>
+<td>TF + SVM</td>
+<td style="text-align: right;">0.4171</td>
+<td style="text-align: right;">0.4391</td>
+<td style="text-align: right;">0.0220</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>TF-IDF</td>
+<td>Proposed MNIR + SVM</td>
+<td style="text-align: right;">0.3525</td>
+<td style="text-align: right;">0.2966</td>
+<td style="text-align: right;">-0.0559</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>TF-IDF</td>
+<td>TFIDF + SVM</td>
+<td style="text-align: right;">0.4278</td>
+<td style="text-align: right;">0.4289</td>
+<td style="text-align: right;">0.0011</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>BoW</td>
+<td>BOW + SVM</td>
+<td style="text-align: right;">0.5637</td>
+<td style="text-align: right;">0.5975</td>
+<td style="text-align: right;">0.0338</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>BoW</td>
+<td>Proposed MNIR + SVM</td>
+<td style="text-align: right;">0.3636</td>
+<td style="text-align: right;">0.3733</td>
+<td style="text-align: right;">0.0097</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>TF</td>
+<td>Proposed MNIR + SVM</td>
+<td style="text-align: right;">0.3702</td>
+<td style="text-align: right;">0.3445</td>
+<td style="text-align: right;">-0.0257</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>TF</td>
+<td>TF + SVM</td>
+<td style="text-align: right;">0.5773</td>
+<td style="text-align: right;">0.5248</td>
+<td style="text-align: right;">-0.0525</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>TF-IDF</td>
+<td>Proposed MNIR + SVM</td>
+<td style="text-align: right;">0.3902</td>
+<td style="text-align: right;">0.3719</td>
+<td style="text-align: right;">-0.0183</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>TF-IDF</td>
+<td>TFIDF + SVM</td>
+<td style="text-align: right;">0.5622</td>
+<td style="text-align: right;">0.5831</td>
+<td style="text-align: right;">0.0210</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>BoW</td>
+<td>BOW + SVM</td>
+<td style="text-align: right;">0.6541</td>
+<td style="text-align: right;">0.6807</td>
+<td style="text-align: right;">0.0265</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>BoW</td>
+<td>Proposed MNIR + SVM</td>
+<td style="text-align: right;">0.5420</td>
+<td style="text-align: right;">0.5441</td>
+<td style="text-align: right;">0.0021</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>TF</td>
+<td>Proposed MNIR + SVM</td>
+<td style="text-align: right;">0.5454</td>
+<td style="text-align: right;">0.5431</td>
+<td style="text-align: right;">-0.0022</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>TF</td>
+<td>TF + SVM</td>
+<td style="text-align: right;">0.5797</td>
+<td style="text-align: right;">0.5838</td>
+<td style="text-align: right;">0.0041</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>TF-IDF</td>
+<td>Proposed MNIR + SVM</td>
+<td style="text-align: right;">0.5373</td>
+<td style="text-align: right;">0.5391</td>
+<td style="text-align: right;">0.0018</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>TF-IDF</td>
+<td>TFIDF + SVM</td>
+<td style="text-align: right;">0.5716</td>
+<td style="text-align: right;">0.5755</td>
+<td style="text-align: right;">0.0039</td>
+</tr>
+</tbody>
+</table>
+<h3 id="51">5.1 各資料集與模型類型的最佳設定</h3>
+<table>
+<thead>
+<tr>
+<th>資料集</th>
+<th>模型</th>
+<th>特徵表示</th>
+<th>最佳路徑</th>
+<th style="text-align: right;">Test Accuracy</th>
+<th style="text-align: right;">Test Macro F1</th>
+<th style="text-align: right;">Best C</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>行政</td>
+<td>BOW + SVM</td>
+<td>BoW</td>
+<td>DTM -&gt; 模型</td>
+<td style="text-align: right;">0.8299</td>
+<td style="text-align: right;">0.4047</td>
+<td style="text-align: right;">0.5</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>Proposed MNIR + SVM</td>
+<td>BoW</td>
+<td>DTM -&gt; 模型</td>
+<td style="text-align: right;">0.8758</td>
+<td style="text-align: right;">0.3185</td>
+<td style="text-align: right;">0.0625</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>TF + SVM</td>
+<td>TF</td>
+<td>DTM -&gt; 模型</td>
+<td style="text-align: right;">0.8732</td>
+<td style="text-align: right;">0.3427</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr>
+<td>行政</td>
+<td>TFIDF + SVM</td>
+<td>TF-IDF</td>
+<td>DTM -&gt; 模型</td>
+<td style="text-align: right;">0.8568</td>
+<td style="text-align: right;">0.3894</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>BOW + SVM</td>
+<td>BoW</td>
+<td>DTM -&gt; 模型</td>
+<td style="text-align: right;">0.6523</td>
+<td style="text-align: right;">0.4164</td>
+<td style="text-align: right;">0.0625</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>Proposed MNIR + SVM</td>
+<td>TF-IDF</td>
+<td>DTM -&gt; 卡方 -&gt; 模型</td>
+<td style="text-align: right;">0.6955</td>
+<td style="text-align: right;">0.3525</td>
+<td style="text-align: right;">0.125</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>TF + SVM</td>
+<td>TF</td>
+<td>DTM -&gt; 模型</td>
+<td style="text-align: right;">0.6920</td>
+<td style="text-align: right;">0.4391</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td>民事</td>
+<td>TFIDF + SVM</td>
+<td>TF-IDF</td>
+<td>DTM -&gt; 模型</td>
+<td style="text-align: right;">0.6840</td>
+<td style="text-align: right;">0.4289</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>BOW + SVM</td>
+<td>BoW</td>
+<td>DTM -&gt; 模型</td>
+<td style="text-align: right;">0.9487</td>
+<td style="text-align: right;">0.5975</td>
+<td style="text-align: right;">0.0625</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>Proposed MNIR + SVM</td>
+<td>TF-IDF</td>
+<td>DTM -&gt; 卡方 -&gt; 模型</td>
+<td style="text-align: right;">0.9277</td>
+<td style="text-align: right;">0.3902</td>
+<td style="text-align: right;">0.125</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>TF + SVM</td>
+<td>TF</td>
+<td>DTM -&gt; 卡方 -&gt; 模型</td>
+<td style="text-align: right;">0.9514</td>
+<td style="text-align: right;">0.5773</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr>
+<td>刑事</td>
+<td>TFIDF + SVM</td>
+<td>TF-IDF</td>
+<td>DTM -&gt; 模型</td>
+<td style="text-align: right;">0.9462</td>
+<td style="text-align: right;">0.5831</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>BOW + SVM</td>
+<td>BoW</td>
+<td>DTM -&gt; 模型</td>
+<td style="text-align: right;">0.8757</td>
+<td style="text-align: right;">0.6807</td>
+<td style="text-align: right;">0.0625</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>Proposed MNIR + SVM</td>
+<td>TF</td>
+<td>DTM -&gt; 卡方 -&gt; 模型</td>
+<td style="text-align: right;">0.8232</td>
+<td style="text-align: right;">0.5454</td>
+<td style="text-align: right;">0.125</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>TF + SVM</td>
+<td>TF</td>
+<td>DTM -&gt; 模型</td>
+<td style="text-align: right;">0.8729</td>
+<td style="text-align: right;">0.5838</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td>CWC</td>
+<td>TFIDF + SVM</td>
+<td>TF-IDF</td>
+<td>DTM -&gt; 模型</td>
+<td style="text-align: right;">0.8619</td>
+<td style="text-align: right;">0.5755</td>
+<td style="text-align: right;">0.5</td>
+</tr>
+</tbody>
+</table>
+<h2 id="6">6. 結果解讀</h2>
+<ul>
+<li>Direct SVM 直接使用 DTM 的效果較穩定，多數情況下比先做卡方特徵選擇更好</li>
+<li>MNIR + SVM 對卡方較敏感。在部分 TF / TF-IDF 設定下，先做卡方再進 MNIR 可能讓投影較穩定。</li>
+<li>MNIR + SVM 雖然可以把高維 DTM 壓縮成低維 z 特徵，但目前結果沒有優於 Direct SVM。這代表 MNIR 降維後可能犧牲了一些對分類有用的文字訊號</li>
+<li>卡方特徵選擇不是一定有效。它在部分 MNIR 路徑或特定資料集有幫助，但對 Direct SVM 來說，直接使用完整 DTM 通常表現更好</li>
+</ul>
+    <div class="note">Source file: D:\Github\Personal-Project\textual data analysis\artifacts\reports\research_pipeline_path_and_results.md</div>
+  </main>
+</body>
+</html>

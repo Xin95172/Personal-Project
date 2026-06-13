@@ -13,8 +13,14 @@ def _ensure_1d_labels(y: np.ndarray, name: str = 'y_train') -> np.ndarray:
 
 
 class SVMClassifier:
-    def __init__(self, max_iter: int = 1000, C: float = 1.0):
-        self.model = LinearSVC(max_iter=max_iter, C=C)
+    def __init__(
+        self,
+        max_iter: int = 50000,
+        C: float = 1.0,
+        tol: float = 1e-4,
+        class_weight: str | dict | None = None,
+    ):
+        self.model = LinearSVC(max_iter=max_iter, C=C, tol=tol, class_weight=class_weight)
         self.is_fitted = False
 
     def fit(self, x_train: sp.csr_matrix, y_train: np.ndarray) -> None:

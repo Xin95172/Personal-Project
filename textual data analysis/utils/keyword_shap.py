@@ -18,6 +18,7 @@ from utils.dtm_utils import custom_tokenizer
 from utils.pipeline_modeling import (
     apply_chi2_feature_selection,
     load_modeling_data,
+    prepare_mnir_no_chi2_input,
     split_modeling_data,
     stratified_sample_modeling_data,
 )
@@ -282,7 +283,49 @@ def latest_mnir_svm_config(
     raise ValueError(f"No MNIR + SVM config found for {dataset_name}/{leakage_variant}/{representation}.")
 
 
-def _resolve_mnir_feature_dir(cfg, representation, mnir_features_folder):
+def _normalise_model_variant(model_variant):
+    model_variant = str(model_variant).lower().replace("-", "_")
+    aliases = {
+        "chi2": "with_chi2",
+        "with_chi_square": "with_chi2",
+        "no_chi_square": "no_chi2",
+        "none": "no_chi2",
+        "all": "no_chi2",
+    }
+    model_variant = aliases.get(model_variant, model_variant)
+    if model_variant not in {"with_chi2", "no_chi2"}:
+        raise ValueError("model_variant must be 'with_chi2' or 'no_chi2'.")
+    return model_variant
+
+
+def _cfg_bool(value):
+    if isinstance(value, bool):
+        return value
+    if pd.isna(value):
+        return False
+    return str(value).strip().lower() in {"true", "1", "yes"}
+
+
+def _cfg_optional_int(value):
+    if value is None or pd.isna(value):
+        return None
+    return int(float(value))
+
+
+def _resolve_mnir_feature_dir(cfg, representation, mnir_features_folder, model_variant="with_chi2"):
+    model_variant = _normalise_model_variant(model_variant)
+    if model_variant == "no_chi2":
+        if _cfg_bool(cfg.get("mnir_no_chi2_lowfreq_filter_applied")):
+            min_train_df = _cfg_optional_int(cfg.get("mnir_no_chi2_min_train_df")) or 1
+            feature_variant = f"{representation}_no_chi2_mnir_min_df{min_train_df}"
+            feature_limit = _cfg_optional_int(cfg.get("mnir_no_chi2_feature_limit"))
+            selected_features = _cfg_optional_int(cfg.get("mnir_no_chi2_selected_features"))
+            if feature_limit is not None and selected_features == feature_limit:
+                feature_variant += f"_top{feature_limit}"
+        else:
+            feature_variant = representation
+        return Path(mnir_features_folder) / cfg["dataset_slug"] / cfg["leakage_variant"] / feature_variant
+
     best_k = cfg["best_chi2_k"]
     feature_variant = representation if str(best_k).lower() == "all" else f"{representation}_chi2_k{int(float(best_k))}"
     return Path(mnir_features_folder) / cfg["dataset_slug"] / cfg["leakage_variant"] / feature_variant
@@ -357,10 +400,12 @@ def mnir_feature_shap_svm(
     artifacts_folder="../artifacts/reports",
     mnir_features_folder="../artifacts/features/mnir",
     run_tag=None,
+    model_variant="with_chi2",
     show_plot=True,
 ):
     """Compute linear SHAP-style contributions for the MNIR z features used by MNIR + SVM."""
     configure_chinese_matplotlib_fonts()
+    model_variant = _normalise_model_variant(model_variant)
     representation = representation.lower().replace("-", "_")
     if representation == "tf_idf":
         representation = "tfidf"
@@ -372,9 +417,9 @@ def mnir_feature_shap_svm(
         artifacts_folder=artifacts_folder,
         run_tag=run_tag,
     )
-    best_c = float(cfg["best_svm_c"])
+    best_c = float(cfg["no_chi2_mnir_svm_c"] if model_variant == "no_chi2" else cfg["best_svm_c"])
     max_rows = None if pd.isna(cfg.get("max_rows")) else int(cfg["max_rows"])
-    feature_dir = _resolve_mnir_feature_dir(cfg, representation, mnir_features_folder)
+    feature_dir = _resolve_mnir_feature_dir(cfg, representation, mnir_features_folder, model_variant=model_variant)
     z = _load_mnir_z_splits(feature_dir)
     feature_names = np.array([f"mnir_z_{idx + 1}" for idx in range(z["z_train"].shape[1])])
 
@@ -413,10 +458,10 @@ def mnir_feature_shap_svm(
         top_n,
     )
 
-    out_dir = Path(artifacts_folder) / dataset_name / cfg["leakage_variant"] / representation / "mnir_feature_shap"
+    out_dir = Path(artifacts_folder) / dataset_name / cfg["leakage_variant"] / representation / "mnir_feature_shap" / model_variant
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_csv = out_dir / f"mnir_svm_z_feature_shap_{class_label}.csv"
-    out_png = out_dir / f"mnir_svm_z_feature_shap_{class_label}.png"
+    out_csv = out_dir / f"mnir_svm_z_feature_shap_{model_variant}_{class_label}.csv"
+    out_png = out_dir / f"mnir_svm_z_feature_shap_{model_variant}_{class_label}.png"
     ranked.to_csv(out_csv, index=False, encoding="utf-8-sig")
 
     ax = ranked.sort_values("mean_abs_shap").plot.barh(
@@ -425,7 +470,7 @@ def mnir_feature_shap_svm(
         figsize=(8, max(5, top_n * 0.25)),
         legend=False,
     )
-    ax.set_title(f"MNIR + SVM z-feature SHAP-style contributions: {class_label}")
+    ax.set_title(f"MNIR + SVM z-feature SHAP-style contributions ({model_variant}): {class_label}")
     ax.set_xlabel("mean |linear SHAP contribution|")
     ax.set_ylabel("MNIR feature")
     plt.tight_layout()
@@ -437,7 +482,8 @@ def mnir_feature_shap_svm(
 
     print("Config summary:", cfg["summary_path"])
     print("MNIR feature dir:", feature_dir)
-    print("Best K:", cfg["best_chi2_k"], "Best C:", best_c, "Class:", class_label)
+    print("Model variant:", model_variant)
+    print("Best K:", "all" if model_variant == "no_chi2" else cfg["best_chi2_k"], "Best C:", best_c, "Class:", class_label)
     print("Saved CSV:", out_csv)
     print("Saved plot:", out_png)
     return ranked
@@ -562,10 +608,12 @@ def mnir_projected_keyword_importance(
     artifacts_folder="../artifacts/reports",
     mnir_features_folder="../artifacts/features/mnir",
     run_tag=None,
+    model_variant="with_chi2",
     show_plot=True,
 ):
     """Project MNIR + SVM weights back to selected keyword columns using MNIR coefficients."""
     configure_chinese_matplotlib_fonts()
+    model_variant = _normalise_model_variant(model_variant)
     representation = representation.lower().replace("-", "_")
     if representation == "tf_idf":
         representation = "tfidf"
@@ -577,10 +625,10 @@ def mnir_projected_keyword_importance(
         artifacts_folder=artifacts_folder,
         run_tag=run_tag,
     )
-    best_k = None if str(cfg["best_chi2_k"]).lower() == "all" else int(float(cfg["best_chi2_k"]))
-    best_c = float(cfg["best_svm_c"])
+    best_k = None if model_variant == "no_chi2" or str(cfg["best_chi2_k"]).lower() == "all" else int(float(cfg["best_chi2_k"]))
+    best_c = float(cfg["no_chi2_mnir_svm_c"] if model_variant == "no_chi2" else cfg["best_svm_c"])
     max_rows = None if pd.isna(cfg.get("max_rows")) else int(cfg["max_rows"])
-    feature_dir = _resolve_mnir_feature_dir(cfg, representation, mnir_features_folder)
+    feature_dir = _resolve_mnir_feature_dir(cfg, representation, mnir_features_folder, model_variant=model_variant)
     z = _load_mnir_z_splits(feature_dir)
 
     modeling_data = load_modeling_data(
@@ -639,7 +687,13 @@ def mnir_projected_keyword_importance(
         representation=representation,
     )
     selected_idx = chi2_data["selected_feature_indices"]
-    selected_terms = vocab if selected_idx is None else vocab[selected_idx]
+    if model_variant == "no_chi2":
+        selected_terms = vocab
+        mnir_selected_idx_path = feature_dir / "mnir_no_chi2_selected_feature_indices.npy"
+        if mnir_selected_idx_path.exists():
+            selected_terms = vocab[np.load(mnir_selected_idx_path)]
+    else:
+        selected_terms = vocab if selected_idx is None else vocab[selected_idx]
 
     feature_names = np.array([f"mnir_z_{idx + 1}" for idx in range(z["z_train"].shape[1])])
     _, model, class_label, class_index = _fit_linear_svm_and_rank_features(
@@ -680,10 +734,10 @@ def mnir_projected_keyword_importance(
         .reset_index(drop=True)
     )
 
-    out_dir = Path(artifacts_folder) / dataset_name / cfg["leakage_variant"] / representation / "mnir_projected_keywords"
+    out_dir = Path(artifacts_folder) / dataset_name / cfg["leakage_variant"] / representation / "mnir_projected_keywords" / model_variant
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_csv = out_dir / f"mnir_svm_projected_keyword_importance_{class_label}.csv"
-    out_png = out_dir / f"mnir_svm_projected_keyword_importance_{class_label}.png"
+    out_csv = out_dir / f"mnir_svm_projected_keyword_importance_{model_variant}_{class_label}.csv"
+    out_png = out_dir / f"mnir_svm_projected_keyword_importance_{model_variant}_{class_label}.png"
     ranked.to_csv(out_csv, index=False, encoding="utf-8-sig")
 
     ax = ranked.sort_values("abs_mnir_projected_weight").plot.barh(
@@ -692,7 +746,7 @@ def mnir_projected_keyword_importance(
         figsize=(8, max(5, top_n * 0.25)),
         legend=False,
     )
-    ax.set_title(f"MNIR + SVM projected keyword importance: {class_label}")
+    ax.set_title(f"MNIR + SVM projected keyword importance ({model_variant}): {class_label}")
     ax.set_xlabel("|projected MNIR keyword weight|")
     ax.set_ylabel("keyword")
     plt.tight_layout()
@@ -704,7 +758,8 @@ def mnir_projected_keyword_importance(
 
     print("Config summary:", cfg["summary_path"])
     print("MNIR feature dir:", feature_dir)
-    print("Best K:", cfg["best_chi2_k"], "Best C:", best_c, "Class:", class_label)
+    print("Model variant:", model_variant)
+    print("Best K:", "all" if model_variant == "no_chi2" else cfg["best_chi2_k"], "Best C:", best_c, "Class:", class_label)
     print("Saved CSV:", out_csv)
     print("Saved plot:", out_png)
     return ranked
@@ -718,23 +773,38 @@ def keyword_linear_shap_direct_svm(
     class_label=None,
     features_folder="../artifacts/features/dtm",
     artifacts_folder="../artifacts/reports",
+    run_tag=None,
+    model_variant="with_chi2",
     show_plot=True,
 ):
     """Compute keyword-level linear SHAP-style contributions for Direct SVM."""
     configure_chinese_matplotlib_fonts()
+    model_variant = _normalise_model_variant(model_variant)
     representation = representation.lower().replace("-", "_")
     if representation == "tf_idf":
         representation = "tfidf"
 
-    cfg = latest_direct_svm_config(
-        dataset_name,
-        remove_leakage,
-        representation,
-        artifacts_folder=artifacts_folder,
-    )
-    best_k = None if str(cfg["best_direct_chi2_k"]).lower() == "all" else int(float(cfg["best_direct_chi2_k"]))
-    best_c = float(cfg["best_direct_svm_c"])
-    max_rows = None if pd.isna(cfg.get("direct_svm_patch_max_rows")) else int(cfg["direct_svm_patch_max_rows"])
+    if model_variant == "no_chi2":
+        cfg = latest_mnir_svm_config(
+            dataset_name,
+            remove_leakage,
+            representation,
+            artifacts_folder=artifacts_folder,
+            run_tag=run_tag,
+        )
+        best_k = None
+        best_c = float(cfg["no_chi2_svm_c"])
+        max_rows = None if pd.isna(cfg.get("max_rows")) else int(cfg["max_rows"])
+    else:
+        cfg = latest_direct_svm_config(
+            dataset_name,
+            remove_leakage,
+            representation,
+            artifacts_folder=artifacts_folder,
+        )
+        best_k = None if str(cfg["best_direct_chi2_k"]).lower() == "all" else int(float(cfg["best_direct_chi2_k"]))
+        best_c = float(cfg["best_direct_svm_c"])
+        max_rows = None if pd.isna(cfg.get("direct_svm_patch_max_rows")) else int(cfg["direct_svm_patch_max_rows"])
 
     modeling_data = load_modeling_data(
         dataset_name=dataset_name,
@@ -827,10 +897,10 @@ def keyword_linear_shap_direct_svm(
     )
 
     leakage_variant = "no_leakage" if remove_leakage else "with_leakage"
-    out_dir = Path(artifacts_folder) / dataset_name / leakage_variant / representation / "keyword_shap"
+    out_dir = Path(artifacts_folder) / dataset_name / leakage_variant / representation / "keyword_shap" / model_variant
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_csv = out_dir / f"direct_svm_keyword_shap_{class_label}.csv"
-    out_png = out_dir / f"direct_svm_keyword_shap_{class_label}.png"
+    out_csv = out_dir / f"direct_svm_keyword_shap_{model_variant}_{class_label}.csv"
+    out_png = out_dir / f"direct_svm_keyword_shap_{model_variant}_{class_label}.png"
     keyword_shap.to_csv(out_csv, index=False, encoding="utf-8-sig")
 
     ax = keyword_shap.sort_values("mean_abs_shap").plot.barh(
@@ -839,7 +909,7 @@ def keyword_linear_shap_direct_svm(
         figsize=(8, max(5, top_n * 0.25)),
         legend=False,
     )
-    ax.set_title(f"Direct SVM keyword SHAP-style contributions: {class_label}")
+    ax.set_title(f"Direct SVM keyword SHAP-style contributions ({model_variant}): {class_label}")
     ax.set_xlabel("mean |linear SHAP contribution|")
     ax.set_ylabel("keyword")
     plt.tight_layout()
@@ -850,7 +920,8 @@ def keyword_linear_shap_direct_svm(
         plt.close()
 
     print("Config summary:", cfg["summary_path"])
-    print("Best K:", best_k, "Best C:", best_c, "Class:", class_label)
+    print("Model variant:", model_variant)
+    print("Best K:", "all" if best_k is None else best_k, "Best C:", best_c, "Class:", class_label)
     print("Saved CSV:", out_csv)
     print("Saved plot:", out_png)
     return keyword_shap

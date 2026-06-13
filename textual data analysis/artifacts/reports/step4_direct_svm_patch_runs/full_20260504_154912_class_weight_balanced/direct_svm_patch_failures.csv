@@ -1,0 +1,13 @@
+﻿dataset_name,remove_leakage,representation,error
+administrative_win_lose_mixed,True,bow,FileNotFoundError('Existing Step 3 run folder not found: ../artifacts/reports\\administrative_win_lose_mixed\\no_leakage\\bow\\step3_runs\\full_20260504_154912_class_weight_balanced')
+administrative_win_lose_mixed,True,tf,FileNotFoundError('Existing Step 3 run folder not found: ../artifacts/reports\\administrative_win_lose_mixed\\no_leakage\\tf\\step3_runs\\full_20260504_154912_class_weight_balanced')
+administrative_win_lose_mixed,True,tfidf,FileNotFoundError('Existing Step 3 run folder not found: ../artifacts/reports\\administrative_win_lose_mixed\\no_leakage\\tfidf\\step3_runs\\full_20260504_154912_class_weight_balanced')
+civil_win_lose_mixed,True,bow,FileNotFoundError('Existing Step 3 run folder not found: ../artifacts/reports\\civil_win_lose_mixed\\no_leakage\\bow\\step3_runs\\full_20260504_154912_class_weight_balanced')
+civil_win_lose_mixed,True,tf,FileNotFoundError('Existing Step 3 run folder not found: ../artifacts/reports\\civil_win_lose_mixed\\no_leakage\\tf\\step3_runs\\full_20260504_154912_class_weight_balanced')
+civil_win_lose_mixed,True,tfidf,FileNotFoundError('Existing Step 3 run folder not found: ../artifacts/reports\\civil_win_lose_mixed\\no_leakage\\tfidf\\step3_runs\\full_20260504_154912_class_weight_balanced')
+criminal_win_lose_mixed,True,bow,FileNotFoundError('Existing Step 3 run folder not found: ../artifacts/reports\\criminal_win_lose_mixed\\no_leakage\\bow\\step3_runs\\full_20260504_154912_class_weight_balanced')
+criminal_win_lose_mixed,True,tf,FileNotFoundError('Existing Step 3 run folder not found: ../artifacts/reports\\criminal_win_lose_mixed\\no_leakage\\tf\\step3_runs\\full_20260504_154912_class_weight_balanced')
+criminal_win_lose_mixed,True,tfidf,FileNotFoundError('Existing Step 3 run folder not found: ../artifacts/reports\\criminal_win_lose_mixed\\no_leakage\\tfidf\\step3_runs\\full_20260504_154912_class_weight_balanced')
+cwc_win_lose_mixed,True,bow,FileNotFoundError('Existing Step 3 run folder not found: ../artifacts/reports\\cwc_win_lose_mixed\\no_leakage\\bow\\step3_runs\\full_20260504_154912_class_weight_balanced')
+cwc_win_lose_mixed,True,tf,FileNotFoundError('Existing Step 3 run folder not found: ../artifacts/reports\\cwc_win_lose_mixed\\no_leakage\\tf\\step3_runs\\full_20260504_154912_class_weight_balanced')
+cwc_win_lose_mixed,True,tfidf,FileNotFoundError('Existing Step 3 run folder not found: ../artifacts/reports\\cwc_win_lose_mixed\\no_leakage\\tfidf\\step3_runs\\full_20260504_154912_class_weight_balanced')

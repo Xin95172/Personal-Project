@@ -1,0 +1,25 @@
+﻿Dataset,dataset_slug,Leakage,Feature,DTM shape,nnz,Density,Path
+Administrative,administrative_win_lose_mixed,no_leakage,BoW,"11,310 x 21,428","740,220",0.3054%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\administrative_win_lose_mixed\no_leakage\dtm_csr_BoW.npz
+Administrative,administrative_win_lose_mixed,no_leakage,TF,"11,310 x 21,428","740,220",0.3054%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\administrative_win_lose_mixed\no_leakage\dtm_csr_TF.npz
+Administrative,administrative_win_lose_mixed,no_leakage,TF-IDF,"11,310 x 21,428","740,220",0.3054%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\administrative_win_lose_mixed\no_leakage\dtm_csr_TF_IDF.npz
+Administrative,administrative_win_lose_mixed,with_leakage,BoW,"11,310 x 22,144","780,599",0.3117%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\administrative_win_lose_mixed\with_leakage\dtm_csr_BoW.npz
+Administrative,administrative_win_lose_mixed,with_leakage,TF,"11,310 x 22,144","780,599",0.3117%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\administrative_win_lose_mixed\with_leakage\dtm_csr_TF.npz
+Administrative,administrative_win_lose_mixed,with_leakage,TF-IDF,"11,310 x 22,144","780,599",0.3117%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\administrative_win_lose_mixed\with_leakage\dtm_csr_TF_IDF.npz
+Civil,civil_win_lose_mixed,no_leakage,BoW,"5,660 x 24,425","681,384",0.4929%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\civil_win_lose_mixed\no_leakage\dtm_csr_BoW.npz
+Civil,civil_win_lose_mixed,no_leakage,TF,"5,660 x 24,425","681,384",0.4929%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\civil_win_lose_mixed\no_leakage\dtm_csr_TF.npz
+Civil,civil_win_lose_mixed,no_leakage,TF-IDF,"5,660 x 24,425","681,384",0.4929%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\civil_win_lose_mixed\no_leakage\dtm_csr_TF_IDF.npz
+Civil,civil_win_lose_mixed,with_leakage,BoW,"5,660 x 25,173","730,862",0.5130%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\civil_win_lose_mixed\with_leakage\dtm_csr_BoW.npz
+Civil,civil_win_lose_mixed,with_leakage,TF,"5,660 x 25,173","730,862",0.5130%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\civil_win_lose_mixed\with_leakage\dtm_csr_TF.npz
+Civil,civil_win_lose_mixed,with_leakage,TF-IDF,"5,660 x 25,173","730,862",0.5130%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\civil_win_lose_mixed\with_leakage\dtm_csr_TF_IDF.npz
+Criminal,criminal_win_lose_mixed,no_leakage,BoW,"26,131 x 38,159","2,203,537",0.2210%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\criminal_win_lose_mixed\no_leakage\dtm_csr_BoW.npz
+Criminal,criminal_win_lose_mixed,no_leakage,TF,"26,131 x 38,159","2,203,537",0.2210%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\criminal_win_lose_mixed\no_leakage\dtm_csr_TF.npz
+Criminal,criminal_win_lose_mixed,no_leakage,TF-IDF,"26,131 x 38,159","2,203,537",0.2210%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\criminal_win_lose_mixed\no_leakage\dtm_csr_TF_IDF.npz
+Criminal,criminal_win_lose_mixed,with_leakage,BoW,"26,131 x 38,896","2,241,689",0.2206%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\criminal_win_lose_mixed\with_leakage\dtm_csr_BoW.npz
+Criminal,criminal_win_lose_mixed,with_leakage,TF,"26,131 x 38,896","2,241,689",0.2206%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\criminal_win_lose_mixed\with_leakage\dtm_csr_TF.npz
+Criminal,criminal_win_lose_mixed,with_leakage,TF-IDF,"26,131 x 38,896","2,241,689",0.2206%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\criminal_win_lose_mixed\with_leakage\dtm_csr_TF_IDF.npz
+CWC,cwc_win_lose_mixed,no_leakage,BoW,"1,807 x 5,773","148,052",1.4192%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\cwc_win_lose_mixed\no_leakage\dtm_csr_BoW.npz
+CWC,cwc_win_lose_mixed,no_leakage,TF,"1,807 x 5,773","148,052",1.4192%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\cwc_win_lose_mixed\no_leakage\dtm_csr_TF.npz
+CWC,cwc_win_lose_mixed,no_leakage,TF-IDF,"1,807 x 5,773","148,052",1.4192%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\cwc_win_lose_mixed\no_leakage\dtm_csr_TF_IDF.npz
+CWC,cwc_win_lose_mixed,with_leakage,BoW,"1,807 x 5,912","164,155",1.5366%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\cwc_win_lose_mixed\with_leakage\dtm_csr_BoW.npz
+CWC,cwc_win_lose_mixed,with_leakage,TF,"1,807 x 5,912","164,155",1.5366%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\cwc_win_lose_mixed\with_leakage\dtm_csr_TF.npz
+CWC,cwc_win_lose_mixed,with_leakage,TF-IDF,"1,807 x 5,912","164,155",1.5366%,D:\Github\Personal-Project\textual data analysis\artifacts\features\dtm\cwc_win_lose_mixed\with_leakage\dtm_csr_TF_IDF.npz

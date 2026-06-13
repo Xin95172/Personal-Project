@@ -1,0 +1,6 @@
+﻿,Model,Best C,Test Accuracy,Test Macro F1,mnir_no_chi2_lowfreq_filter_applied,mnir_no_chi2_feature_limit,mnir_no_chi2_min_train_df,mnir_no_chi2_original_features,mnir_no_chi2_selected_features,mnir_no_chi2_removed_features,mnir_no_chi2_zero_train_features,mnir_no_chi2_filter_reason
+0,Majority Class,,0.8762704374723818,0.3113518605746585,,,,,,,,
+1,TF + SVM,4.0,0.8276623950508175,0.3877739208658933,,,,,,,,
+2,TF + SVM (No Chi-square),4.0,0.821917808219178,0.4095134482347142,,,,,,,,
+3,Proposed MNIR + SVM (No Chi-square),0.125,0.8718515245249668,0.31051306263770856,True,,1.0,21428.0,20658.0,770.0,770.0,train_df_gte_1
+4,Proposed MNIR + SVM,2.0,0.8669907202828104,0.3260001300484622,,,,,,,,
