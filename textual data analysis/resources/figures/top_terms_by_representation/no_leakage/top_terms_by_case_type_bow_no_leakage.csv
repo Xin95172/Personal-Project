@@ -1,0 +1,61 @@
+﻿dataset,dataset_label,leakage_variant,representation,rank,term,relative_frequency
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,1,商標,0.04396981765488019
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,2,專利,0.02798515086457551
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,3,被告,0.022097676129166105
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,4,原告,0.021133456761794595
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,5,系爭,0.01972995571034756
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,6,申請,0.016265995668478278
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,7,註冊,0.01564282862827811
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,8,訴訟,0.01435091612627423
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,9,處分,0.01381026174587358
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,10,審查,0.013672740646207718
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,11,參加人,0.013034642743758113
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,12,提起,0.012509705060462133
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,13,規定,0.011991839890863255
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,14,商品,0.011227222576721057
+administrative_win_lose_mixed,Administrative,no_leakage,BoW,15,審定,0.010486966143091097
+civil_win_lose_mixed,Civil,no_leakage,BoW,1,系爭,0.03417348469534317
+civil_win_lose_mixed,Civil,no_leakage,BoW,2,專利,0.0315792646813702
+civil_win_lose_mixed,Civil,no_leakage,BoW,3,被告,0.023645289915464718
+civil_win_lose_mixed,Civil,no_leakage,BoW,4,原告,0.02309381867531052
+civil_win_lose_mixed,Civil,no_leakage,BoW,5,公司,0.02281246786039798
+civil_win_lose_mixed,Civil,no_leakage,BoW,6,上訴人,0.02063731870309096
+civil_win_lose_mixed,Civil,no_leakage,BoW,7,產品,0.010239751087279042
+civil_win_lose_mixed,Civil,no_leakage,BoW,8,商標,0.01009375602155762
+civil_win_lose_mixed,Civil,no_leakage,BoW,9,侵害,0.008340042013478832
+civil_win_lose_mixed,Civil,no_leakage,BoW,10,規定,0.007105881295963325
+civil_win_lose_mixed,Civil,no_leakage,BoW,11,使用,0.006822757261629069
+civil_win_lose_mixed,Civil,no_leakage,BoW,12,技術,0.006277787826021167
+civil_win_lose_mixed,Civil,no_leakage,BoW,13,請求,0.0055809125932861185
+civil_win_lose_mixed,Civil,no_leakage,BoW,14,範圍,0.005483976598232219
+civil_win_lose_mixed,Civil,no_leakage,BoW,15,申請,0.0054408282589704215
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,1,商標,0.03919020520779445
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,2,公司,0.024243076392481463
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,3,商品,0.02180872564235213
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,4,仿冒,0.013031488187618555
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,5,附表,0.012621486463183307
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,6,販賣,0.012056423521296775
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,7,被告,0.010853733402310743
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,8,使用,0.009583997240903605
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,9,著作,0.008651698568718745
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,10,註冊,0.007912812553888602
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,11,圖樣,0.0074807380582859115
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,12,明知,0.007362924642179686
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,13,侵害,0.006983272978099672
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,14,有限公司,0.006768615278496292
+criminal_win_lose_mixed,Criminal,no_leakage,BoW,15,犯罪,0.006672046904638731
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,1,原告,0.0402703196347032
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,2,商標,0.0358027397260274
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,3,被告,0.02996529680365297
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,4,公司,0.020149771689497716
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,5,商品,0.016599086757990867
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,6,上訴人,0.012821917808219178
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,7,民事,0.011225570776255708
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,8,侵害,0.011108675799086759
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,9,規定,0.010915068493150685
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,10,賠償,0.01041826484018265
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,11,損害,0.010312328767123288
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,12,訴訟,0.00949406392694064
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,13,行為,0.009081278538812786
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,14,請求,0.008368949771689498
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,BoW,15,主張,0.007802739726027397

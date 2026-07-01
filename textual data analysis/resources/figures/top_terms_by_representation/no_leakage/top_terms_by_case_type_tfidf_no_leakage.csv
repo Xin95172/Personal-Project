@@ -1,0 +1,61 @@
+﻿dataset,dataset_label,leakage_variant,representation,rank,term,mean_tfidf
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,1,商標,0.1543681589530553
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,2,專利,0.12399924048861294
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,3,被告,0.07645253290244122
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,4,原告,0.07074312787959337
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,5,註冊,0.059206348891283095
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,6,異議,0.05398311716233634
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,7,系爭,0.05114237381613293
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,8,參加人,0.04958932631622549
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,9,訴訟,0.047233654954082875
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,10,處分,0.044146351115377416
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,11,上訴人,0.04382090096866523
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,12,審查,0.04328464501353428
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,13,申請,0.042299642171638126
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,14,商品,0.04165943528913726
+administrative_win_lose_mixed,Administrative,no_leakage,TF-IDF,15,提起,0.041607447584472705
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,1,專利,0.09667811809182111
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,2,原告,0.09589924911889869
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,3,上訴人,0.09029985240870803
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,4,系爭,0.08048014858923247
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,5,被告,0.07976521201844196
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,6,公司,0.0623597741232056
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,7,商標,0.04645359874225318
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,8,智慧,0.0435806332047255
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,9,財產,0.04240250846741464
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,10,民事,0.035527282821365594
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,11,產品,0.03444172122784635
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,12,法院,0.03371126783442972
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,13,方面,0.031777382306699936
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,14,事件,0.030756988683356485
+civil_win_lose_mixed,Civil,no_leakage,TF-IDF,15,規定,0.029418853396590436
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,1,商標,0.12606885309170218
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,2,商品,0.07416349830629063
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,3,公司,0.05735712359919827
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,4,附表,0.05005472472896584
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,5,被告,0.04982874828152159
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,6,仿冒,0.04978086002665534
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,7,販賣,0.04294502393255128
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,8,犯罪,0.040382925729892404
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,9,事實,0.03408899555550039
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,10,證據,0.03358719343383221
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,11,著作,0.03338001496492304
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,12,使用,0.032340832964262434
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,13,註冊,0.030731453716470476
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,14,圖樣,0.029732260945457827
+criminal_win_lose_mixed,Criminal,no_leakage,TF-IDF,15,判決,0.028238866665697457
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,1,原告,0.132993287804889
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,2,商標,0.12245692083250753
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,3,被告,0.09299038321973739
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,4,上訴人,0.07013342098673232
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,5,商品,0.06695586428117044
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,6,公司,0.059719289464293675
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,7,民事,0.051113692950609524
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,8,訴訟,0.051009774362658675
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,9,行為,0.04528119657789208
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,10,侵權,0.04338600919909162
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,11,刑事,0.04308264007596901
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,12,涉外,0.04302219061056318
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,13,我國,0.039732824423300075
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,14,方面,0.039190477081361516
+cwc_win_lose_mixed,Criminal with Attached Civil,no_leakage,TF-IDF,15,法律,0.03910629177957109
