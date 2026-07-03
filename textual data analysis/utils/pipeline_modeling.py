@@ -859,6 +859,88 @@ def tune_chi2_k_with_validation(
     }
 
 
+def _split_sample_indices_for_test(sample_indices, y_sample, train_size, val_size, test_size, random_state, stratify=True):
+    y_sample = np.asarray(y_sample).ravel()
+    first_stratify = y_sample if stratify else None
+    train_idx, temp_idx, _, y_temp = train_test_split(
+        sample_indices,
+        y_sample,
+        train_size=train_size,
+        random_state=random_state,
+        stratify=first_stratify,
+    )
+    relative_test_size = test_size / (val_size + test_size)
+    second_stratify = y_temp if stratify else None
+    _, test_idx = train_test_split(
+        temp_idx,
+        test_size=relative_test_size,
+        random_state=random_state,
+        stratify=second_stratify,
+    )
+    return np.asarray(test_idx)
+
+
+def build_step3_test_predictions(
+    modeling_data,
+    sampled_data,
+    split_data,
+    svm_results,
+    baseline_results,
+    representation,
+    train_size,
+    val_size,
+    test_size,
+    random_state,
+):
+    """Build row-level test predictions for paired downstream checks."""
+    direct_model_name = f'{representation.upper()} + SVM'
+    direct_results = (baseline_results or {}).get(direct_model_name)
+    if direct_results is None:
+        return None
+    if 'y_test_pred' not in svm_results or 'y_test_pred' not in direct_results:
+        return None
+
+    test_source_rows = _split_sample_indices_for_test(
+        sampled_data['sample_indices'],
+        sampled_data['y'],
+        train_size=train_size,
+        val_size=val_size,
+        test_size=test_size,
+        random_state=random_state,
+        stratify=True,
+    )
+    predictions = pd.DataFrame(
+        {
+            'test_row': np.arange(len(split_data['y_test'])),
+            'source_row': test_source_rows,
+            'y_true': np.asarray(split_data['y_test']),
+            'y_pred_svm': np.asarray(direct_results['y_test_pred']),
+            'y_pred_mnir_svm': np.asarray(svm_results['y_test_pred']),
+        }
+    )
+
+    report_folder = Path(modeling_data['verdict_results_path']).parent
+    doc_ids_path = report_folder / 'doc_ids.csv'
+    if doc_ids_path.exists():
+        doc_ids = pd.read_csv(doc_ids_path)
+        meta_cols = [col for col in ['JID', 'JTYPE', 'VERDICT'] if col in doc_ids.columns]
+        doc_meta = doc_ids.iloc[test_source_rows][meta_cols].reset_index(drop=True)
+        insert_at = 2
+        for col in meta_cols:
+            out_col = 'doc_' + col.lower() if col == 'VERDICT' else col
+            predictions.insert(insert_at, out_col, doc_meta[col].to_numpy())
+            insert_at += 1
+
+    if not np.array_equal(predictions['y_true'].to_numpy(), np.asarray(split_data['y_test'])):
+        raise RuntimeError("Internal alignment check failed: y_true does not match split_data['y_test'].")
+    if 'doc_verdict' in predictions.columns and not np.array_equal(
+        predictions['y_true'].astype(str).to_numpy(),
+        predictions['doc_verdict'].astype(str).to_numpy(),
+    ):
+        raise RuntimeError("Internal alignment check failed: y_true does not match doc_ids VERDICT.")
+    return predictions
+
+
 def save_step3_artifacts(
     output_dir,
     chi2_tuning=None,
@@ -871,6 +953,7 @@ def save_step3_artifacts(
     model_comparison=None,
     dataset_summary=None,
     direct_svm_tuning=None,
+    test_predictions=None,
 ):
     """Save Step 3 tables and parameter-surface plots."""
     os.makedirs(output_dir, exist_ok=True)
@@ -1061,6 +1144,9 @@ def save_step3_artifacts(
             _save_df(f'baseline_{slug}_confusion_matrix.csv', result.get('confusion_matrix'))
             _save_df(f'baseline_{slug}_validation_grid.csv', result.get('validation_results'))
 
+    if test_predictions is not None and not test_predictions.empty:
+        _save_df('test_predictions.csv', test_predictions)
+
     if model_comparison is not None and not model_comparison.empty:
         _save_df('model_comparison.csv', model_comparison)
         metric_cols = [col for col in ['Test Accuracy', 'Test Macro F1'] if col in model_comparison.columns]
@@ -1110,6 +1196,7 @@ def run_step3_experiment(
     artifacts_folder='../artifacts/reports',
     mnir_features_folder='../artifacts/features/mnir',
     include_dataset_summary=True,
+    include_no_chi2=True,
 ):
     """Run one complete Step 3 experiment and save its artifacts."""
     representation = _safe_slug(representation.lower().replace('-', '_'))
@@ -1201,69 +1288,86 @@ def run_step3_experiment(
         svm_class_weight=svm_class_weight,
         evaluate_test=True,
     )
-    no_chi2_data = apply_chi2_feature_selection(
-        split_data['x_train'],
-        split_data['y_train'],
-        split_data['x_val'],
-        split_data['x_test'],
-        k=None,
-        output_dir=None,
-        representation=representation,
-    )
-    no_chi2_svm_results = evaluate_svm_grid(
-        no_chi2_data['x_train'],
-        split_data['y_train'],
-        no_chi2_data['x_val'],
-        split_data['y_val'],
-        no_chi2_data['x_test'],
-        split_data['y_test'],
-        svm_grid=svm_c_grid,
-        svm_class_weight=svm_class_weight,
-        evaluate_test=True,
-    )
-    no_chi2_mnir_input = prepare_mnir_no_chi2_input(
-        no_chi2_data,
-        representation=representation,
-        feature_limit=mnir_no_chi2_feature_limit,
-        min_train_df=mnir_no_chi2_min_train_df,
-    )
-    no_chi2_mnir_data = run_mnir_feature_extraction(
-        no_chi2_mnir_input['x_train'],
-        split_data['y_train'],
-        no_chi2_mnir_input['x_val'],
-        no_chi2_mnir_input['x_test'],
-        dataset_slug=modeling_data['dataset_slug'],
-        leakage_variant=modeling_data['leakage_variant'],
-        feature_variant=no_chi2_mnir_input['feature_variant'],
-        mnir_features_folder=mnir_features_folder,
-    )
-    _save_mnir_no_chi2_filter_artifacts(no_chi2_mnir_data, no_chi2_mnir_input)
-    no_chi2_mnir_svm_results = evaluate_svm_grid(
-        no_chi2_mnir_data['z_train'],
-        split_data['y_train'],
-        no_chi2_mnir_data['z_val'],
-        split_data['y_val'],
-        no_chi2_mnir_data['z_test'],
-        split_data['y_test'],
-        svm_grid=svm_c_grid,
-        svm_class_weight=svm_class_weight,
-        evaluate_test=True,
-    )
-    no_chi2_mnir_svm_results = _annotate_no_chi2_mnir_results(
-        no_chi2_mnir_svm_results,
-        no_chi2_mnir_input['mnir_filter_summary'],
-    )
-
     baseline_results = {
         'Majority Class': evaluate_majority_baseline(
             split_data['y_train'],
             split_data['y_test'],
         ),
         f'{representation.upper()} + SVM': direct_svm_results,
-        f'{representation.upper()} + SVM (No Chi-square)': no_chi2_svm_results,
-        'Proposed MNIR + SVM (No Chi-square)': no_chi2_mnir_svm_results,
     }
+    no_chi2_data = None
+    no_chi2_mnir_data = None
+    no_chi2_mnir_input = {'mnir_filter_summary': {}}
+    no_chi2_svm_results = None
+    no_chi2_mnir_svm_results = None
+    if include_no_chi2:
+        no_chi2_data = apply_chi2_feature_selection(
+            split_data['x_train'],
+            split_data['y_train'],
+            split_data['x_val'],
+            split_data['x_test'],
+            k=None,
+            output_dir=None,
+            representation=representation,
+        )
+        no_chi2_svm_results = evaluate_svm_grid(
+            no_chi2_data['x_train'],
+            split_data['y_train'],
+            no_chi2_data['x_val'],
+            split_data['y_val'],
+            no_chi2_data['x_test'],
+            split_data['y_test'],
+            svm_grid=svm_c_grid,
+            svm_class_weight=svm_class_weight,
+            evaluate_test=True,
+        )
+        no_chi2_mnir_input = prepare_mnir_no_chi2_input(
+            no_chi2_data,
+            representation=representation,
+            feature_limit=mnir_no_chi2_feature_limit,
+            min_train_df=mnir_no_chi2_min_train_df,
+        )
+        no_chi2_mnir_data = run_mnir_feature_extraction(
+            no_chi2_mnir_input['x_train'],
+            split_data['y_train'],
+            no_chi2_mnir_input['x_val'],
+            no_chi2_mnir_input['x_test'],
+            dataset_slug=modeling_data['dataset_slug'],
+            leakage_variant=modeling_data['leakage_variant'],
+            feature_variant=no_chi2_mnir_input['feature_variant'],
+            mnir_features_folder=mnir_features_folder,
+        )
+        _save_mnir_no_chi2_filter_artifacts(no_chi2_mnir_data, no_chi2_mnir_input)
+        no_chi2_mnir_svm_results = evaluate_svm_grid(
+            no_chi2_mnir_data['z_train'],
+            split_data['y_train'],
+            no_chi2_mnir_data['z_val'],
+            split_data['y_val'],
+            no_chi2_mnir_data['z_test'],
+            split_data['y_test'],
+            svm_grid=svm_c_grid,
+            svm_class_weight=svm_class_weight,
+            evaluate_test=True,
+        )
+        no_chi2_mnir_svm_results = _annotate_no_chi2_mnir_results(
+            no_chi2_mnir_svm_results,
+            no_chi2_mnir_input['mnir_filter_summary'],
+        )
+        baseline_results[f'{representation.upper()} + SVM (No Chi-square)'] = no_chi2_svm_results
+        baseline_results['Proposed MNIR + SVM (No Chi-square)'] = no_chi2_mnir_svm_results
     model_comparison = build_model_comparison(svm_results, baseline_results)
+    test_predictions = build_step3_test_predictions(
+        modeling_data=modeling_data,
+        sampled_data=sampled_data,
+        split_data=split_data,
+        svm_results=svm_results,
+        baseline_results=baseline_results,
+        representation=representation,
+        train_size=train_size,
+        val_size=val_size,
+        test_size=test_size,
+        random_state=random_state,
+    )
 
     output_dir = os.path.join(
         artifacts_folder,
@@ -1294,8 +1398,9 @@ def run_step3_experiment(
         'best_svm_c': svm_results['best_params']['C'],
         'best_direct_chi2_k': 'all' if direct_svm_tuning['best_k'] is None else direct_svm_tuning['best_k'],
         'best_direct_svm_c': direct_svm_results['best_params']['C'],
-        'no_chi2_svm_c': no_chi2_svm_results['best_params']['C'],
-        'no_chi2_mnir_svm_c': no_chi2_mnir_svm_results['best_params']['C'],
+        'include_no_chi2': include_no_chi2,
+        'no_chi2_svm_c': no_chi2_svm_results['best_params']['C'] if no_chi2_svm_results else None,
+        'no_chi2_mnir_svm_c': no_chi2_mnir_svm_results['best_params']['C'] if no_chi2_mnir_svm_results else None,
         **no_chi2_mnir_input['mnir_filter_summary'],
         'direct_svm_tuning': 'independent_validation_macro_f1',
         'baseline_models': list(baseline_results.keys()),
@@ -1313,6 +1418,7 @@ def run_step3_experiment(
         model_comparison=model_comparison,
         dataset_summary=dataset_summary,
         direct_svm_tuning=direct_svm_tuning,
+        test_predictions=test_predictions,
     )
 
     return {
@@ -1336,6 +1442,7 @@ def run_step3_experiment(
         'no_chi2_mnir_svm_results': no_chi2_mnir_svm_results,
         'baseline_results': baseline_results,
         'model_comparison': model_comparison,
+        'test_predictions': test_predictions,
     }
 
 
@@ -1720,8 +1827,14 @@ def run_step3_batch(
             )
             metrics = result['svm_results']['test_metrics'].iloc[0].to_dict()
             direct_metrics = result['direct_svm_results']['test_metrics'].iloc[0].to_dict()
-            no_chi2_metrics = result['no_chi2_svm_results']['test_metrics'].iloc[0].to_dict()
-            no_chi2_mnir_metrics = result['no_chi2_mnir_svm_results']['test_metrics'].iloc[0].to_dict()
+            no_chi2_metrics = (
+                result['no_chi2_svm_results']['test_metrics'].iloc[0].to_dict()
+                if result.get('no_chi2_svm_results') is not None else {}
+            )
+            no_chi2_mnir_metrics = (
+                result['no_chi2_mnir_svm_results']['test_metrics'].iloc[0].to_dict()
+                if result.get('no_chi2_mnir_svm_results') is not None else {}
+            )
             results.append({
                 **result['run_config'],
                 'output_dir': result['output_dir'],

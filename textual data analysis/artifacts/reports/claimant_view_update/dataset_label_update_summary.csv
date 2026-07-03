@@ -1,0 +1,9 @@
+﻿dataset,leakage,status,rows,changed,Lose,Mixed,Win
+administrative_win_lose_mixed,with_leakage,updated,11310,0,9910,502,898
+administrative_win_lose_mixed,no_leakage,updated,11310,0,9910,502,898
+civil_win_lose_mixed,with_leakage,updated,5660,0,3826,1404,430
+civil_win_lose_mixed,no_leakage,updated,5660,0,3826,1404,430
+criminal_win_lose_mixed,with_leakage,updated,26131,26051,1633,80,24418
+criminal_win_lose_mixed,no_leakage,updated,26131,26051,1633,80,24418
+cwc_win_lose_mixed,with_leakage,updated,1807,0,728,1047,32
+cwc_win_lose_mixed,no_leakage,updated,1807,0,728,1047,32

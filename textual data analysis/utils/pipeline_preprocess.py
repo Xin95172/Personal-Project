@@ -189,7 +189,7 @@ def run_preprocessing(input_folder=None, output_folder=None,
     df = apply_verdict_rules(df, MAIN_PATTERNS, JRESULT_PATTERNS)
 
     # ─── 套用人工標籤 (MANUAL_LABELING) ────────────────────
-    from utils.verdict_utils import map_manual_verdict
+    from utils.verdict_utils import apply_claimant_view_verdicts, map_manual_verdict
     for jid, m in MANUAL_LABELING.items():
         if not jid:
             continue
@@ -202,6 +202,9 @@ def run_preprocessing(input_folder=None, output_folder=None,
             if not isinstance(jfull_val, str):
                 jfull_val = ''
             df.at[idx, 'VERDICT'] = map_manual_verdict(m['j_result'], jfull_val)
+
+    # 統一改為主張權利/發動程序方視角；刑事案件由被告視角轉為追訴方視角。
+    df = apply_claimant_view_verdicts(df)
 
     # ─── valid_mask 僅用於 fact_removed_blank 萃取 ─────────
     valid_jtypes = ('ADMINISTRATIVE', 'CIVIL', 'CRIMINAL', 'CWC')

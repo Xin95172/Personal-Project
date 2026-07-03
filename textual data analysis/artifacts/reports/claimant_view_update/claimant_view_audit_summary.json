@@ -1,0 +1,151 @@
+{
+  "judgment_labels_rows": 90027,
+  "overall_verdict_counts": {
+    "Lose": 16377,
+    "Mixed": 3037,
+    "Other": 43450,
+    "Remand": 1232,
+    "Settlement_Partial": 1,
+    "Win": 25930
+  },
+  "valid_target_counts": {
+    "Lose": 16377,
+    "Mixed": 3037,
+    "Win": 25930
+  },
+  "jtype_verdict_counts": [
+    {
+      "JTYPE": "ADMINISTRATIVE",
+      "VERDICT": "Lose",
+      "count": 10106
+    },
+    {
+      "JTYPE": "ADMINISTRATIVE",
+      "VERDICT": "Mixed",
+      "count": 502
+    },
+    {
+      "JTYPE": "ADMINISTRATIVE",
+      "VERDICT": "Other",
+      "count": 248
+    },
+    {
+      "JTYPE": "ADMINISTRATIVE",
+      "VERDICT": "Remand",
+      "count": 222
+    },
+    {
+      "JTYPE": "ADMINISTRATIVE",
+      "VERDICT": "Win",
+      "count": 911
+    },
+    {
+      "JTYPE": "CIVIL",
+      "VERDICT": "Lose",
+      "count": 3887
+    },
+    {
+      "JTYPE": "CIVIL",
+      "VERDICT": "Mixed",
+      "count": 1408
+    },
+    {
+      "JTYPE": "CIVIL",
+      "VERDICT": "Other",
+      "count": 92
+    },
+    {
+      "JTYPE": "CIVIL",
+      "VERDICT": "Remand",
+      "count": 222
+    },
+    {
+      "JTYPE": "CIVIL",
+      "VERDICT": "Win",
+      "count": 435
+    },
+    {
+      "JTYPE": "CRIMINAL",
+      "VERDICT": "Lose",
+      "count": 1636
+    },
+    {
+      "JTYPE": "CRIMINAL",
+      "VERDICT": "Mixed",
+      "count": 80
+    },
+    {
+      "JTYPE": "CRIMINAL",
+      "VERDICT": "Other",
+      "count": 940
+    },
+    {
+      "JTYPE": "CRIMINAL",
+      "VERDICT": "Remand",
+      "count": 276
+    },
+    {
+      "JTYPE": "CRIMINAL",
+      "VERDICT": "Settlement_Partial",
+      "count": 1
+    },
+    {
+      "JTYPE": "CRIMINAL",
+      "VERDICT": "Win",
+      "count": 24552
+    },
+    {
+      "JTYPE": "CWC",
+      "VERDICT": "Lose",
+      "count": 748
+    },
+    {
+      "JTYPE": "CWC",
+      "VERDICT": "Mixed",
+      "count": 1047
+    },
+    {
+      "JTYPE": "CWC",
+      "VERDICT": "Other",
+      "count": 314
+    },
+    {
+      "JTYPE": "CWC",
+      "VERDICT": "Remand",
+      "count": 22
+    },
+    {
+      "JTYPE": "CWC",
+      "VERDICT": "Win",
+      "count": 32
+    },
+    {
+      "JTYPE": "RULING",
+      "VERDICT": "Other",
+      "count": 29055
+    },
+    {
+      "JTYPE": "RULING",
+      "VERDICT": "Remand",
+      "count": 92
+    },
+    {
+      "JTYPE": "不重要",
+      "VERDICT": "Other",
+      "count": 12801
+    },
+    {
+      "JTYPE": "不重要",
+      "VERDICT": "Remand",
+      "count": 398
+    }
+  ],
+  "criminal_verdict_counts": {
+    "Lose": 1636,
+    "Mixed": 80,
+    "Other": 940,
+    "Remand": 276,
+    "Settlement_Partial": 1,
+    "Win": 24552
+  }
+}

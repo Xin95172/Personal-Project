@@ -150,6 +150,23 @@ def apply_verdict_rules(df, MAIN_PATTERNS, JRESULT_PATTERNS):
     df['VERDICT'] = df.apply(_row_check, axis=1)
     return df
 
+def apply_claimant_view_verdicts(df):
+    """
+    Normalize labels to the claimant/prosecuting-party view.
+
+    The legacy CRIMINAL rules label outcomes from the defendant perspective
+    (acquittal as Win, conviction/sentence as Lose). For the thesis task, Win/Lose
+    are defined from the party asserting rights or initiating prosecution.
+    """
+    if 'JTYPE' not in df.columns or 'VERDICT' not in df.columns:
+        return df
+
+    mask_win = (df['JTYPE'] == 'CRIMINAL') & (df['VERDICT'] == 'Win')
+    mask_lose = (df['JTYPE'] == 'CRIMINAL') & (df['VERDICT'] == 'Lose')
+    df.loc[mask_win, 'VERDICT'] = 'Lose'
+    df.loc[mask_lose, 'VERDICT'] = 'Win'
+    return df
+
 def _process_single_case(file_path, output_folder):
     # 局部 import 利用快取，且避開多進程序列化問題
     from config.patterns import JTITLE_PATTERNS, JTYPE_PATTERNS, MAIN_PATTERNS, JRESULT_PATTERNS, MANUAL_LABELING
@@ -170,6 +187,9 @@ def _process_single_case(file_path, output_folder):
         m = MANUAL_LABELING[jid]
         j_type = m.get('j_type', j_type)
         if 'j_result' in m: j_result = map_manual_verdict(m['j_result'], jfull)
+
+    if j_type == 'CRIMINAL' and j_result in ['Win', 'Lose']:
+        j_result = 'Lose' if j_result == 'Win' else 'Win'
 
     role_f = extract_role_features(jfull, j_type)
     return {

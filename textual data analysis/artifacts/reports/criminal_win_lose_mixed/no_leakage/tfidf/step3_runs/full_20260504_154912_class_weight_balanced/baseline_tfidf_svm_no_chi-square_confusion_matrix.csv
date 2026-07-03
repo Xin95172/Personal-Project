@@ -1,4 +1,4 @@
 ﻿,Predicted Lose,Predicted Mixed,Predicted Win
-Actual Lose,4758,9,117
-Actual Mixed,13,3,0
-Actual Win,101,0,226
+Actual Lose,226,0,101
+Actual Mixed,0,3,13
+Actual Win,117,9,4758
