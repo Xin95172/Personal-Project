@@ -12,7 +12,7 @@ DEFAULT_DIRECT_SVM_HEATMAP_CONFIGS = [
         "dataset": "Administrative",
         "feature": "BoW",
         "path": PROJECT_ROOT
-        / "artifacts/reports/administrative_win_lose_mixed/no_leakage/bow/step3_runs/full_20260504_154912/direct_svm_chi2_k_svm_validation_grid.csv",
+        / "artifacts/reports/administrative_win_lose_mixed/no_leakage/bow/step3_runs/admin_bow_full_20260703_predictions/direct_svm_chi2_k_svm_validation_grid.csv",
     },
     {
         "dataset": "Civil",
