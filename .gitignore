@@ -11,6 +11,9 @@
 *.pyc
 *.pyo
 *.pyd
+*.rds
+*.RData
+*.rda
 .ipynb_checkpoints/
 ~$*.docx
 ~$*.xlsx
