@@ -1249,23 +1249,23 @@ def fetch_0050_buy_hold(
         if cached is not None and cached.index.min() <= start_ts and cached.index.max() >= end_ts:
             return cached.loc[start_ts:end_ts]
 
-    import sys
-
-    if str(note_root) not in sys.path:
-        sys.path.append(str(note_root))
-    from module.get_info_FinMind import FinMindClient
-
-    fm = FinMindClient()
-    fm.initialize_frame(
-        stock_id="0050",
-        start_time=start_ts.strftime("%Y-%m-%d"),
-        end_time=end_ts.strftime("%Y-%m-%d"),
+    daily_path = Path(
+        "/Users/xinc/GitHub/google_drive/Data/trading/tw_stock/"
+        "kbar/1D/daily_stock_price.parquet"
     )
-    price = fm.get_stock()
-    if price.empty or "Close" not in price.columns:
-        raise RuntimeError("No 0050 close price data fetched from FinMind.")
+    price = pd.read_parquet(
+        daily_path,
+        columns=["date", "stock_id", "close"],
+    )
+    price["date"] = pd.to_datetime(price["date"]).dt.normalize()
+    price = price.loc[
+        price["stock_id"].astype(str).eq("0050")
+        & price["date"].between(start_ts, end_ts)
+    ]
+    if price.empty:
+        raise RuntimeError(f"No local 0050 rows found in {daily_path}.")
 
-    close = price["Close"].astype(float).sort_index()
+    close = price.set_index("date")["close"].astype(float).sort_index()
     returns = close.pct_change()
     returns = _apply_taiwan_split_adjustment(
         returns,

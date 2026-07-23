@@ -5,6 +5,14 @@ from pathlib import Path
 import pandas as pd
 
 
+TRADING_DATA_ROOT = Path("/Users/xinc/GitHub/google_drive/Data/trading")
+TX_FUTURES_PATH = TRADING_DATA_ROOT / "tw_futures" / "TX.csv"
+OPTION_NIGHT_PATH = (
+    TRADING_DATA_ROOT / "tw_options" / "institution_position" / "night.parquet"
+)
+TRADINGVIEW_ROOT = TRADING_DATA_ROOT / "market_data" / "tradingview" / "TVC"
+
+
 def _normalize_date(value: str | pd.Timestamp) -> str:
     return pd.Timestamp(value).strftime("%Y-%m-%d")
 
@@ -41,19 +49,19 @@ def _build_foreign_opt_signal_a(raw_night: pd.DataFrame) -> pd.DataFrame:
 
 
 def _tradingview_ohlc(symbol: str, exchange: str, n_bars: int) -> pd.DataFrame:
-    from tvDatafeed import Interval, TvDatafeed
-
-    tv = TvDatafeed()
-    hist = tv.get_hist(
-        symbol=symbol,
-        exchange=exchange,
-        interval=Interval.in_daily,
-        n_bars=n_bars,
+    if exchange != "TVC":
+        raise ValueError(f"Unsupported local TradingView exchange: {exchange}")
+    path = (
+        TRADINGVIEW_ROOT
+        / symbol
+        / "1D_contract-0_extended-0.parquet"
     )
-    if hist is None or hist.empty:
-        raise RuntimeError(f"TradingView returned no data for {exchange}:{symbol}")
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path} is missing. Update it from /Users/xinc/GitHub/note."
+        )
 
-    hist = hist.copy()
+    hist = pd.read_parquet(path).tail(n_bars).copy()
     hist.index = pd.to_datetime(hist.index).normalize()
     return hist[["open", "high", "low", "close"]].sort_index()
 
@@ -68,15 +76,6 @@ def capture_tx_day_features(
 ) -> pd.DataFrame:
     """Capture day-session TX features used by the day-trade notebook."""
 
-    import sys
-
-    note_root = Path(note_root)
-    if str(note_root) not in sys.path:
-        sys.path.append(str(note_root))
-
-    from module.get_info_FinMind import FinMindClient
-    from module.get_info_TWSE import GetInfoTWSE
-
     start_str = _normalize_date(start)
     end_str = _normalize_date(end)
     start_ts = pd.Timestamp(start_str)
@@ -86,11 +85,21 @@ def capture_tx_day_features(
         existing = pd.read_parquet(output_path)
         existing.index = pd.to_datetime(existing.index)
 
-    fm = FinMindClient()
-    fm.initialize_frame(stock_id="TX", start_time=start_str, end_time=end_str)
-    futures = fm.get_future_price()
+    futures = pd.read_csv(TX_FUTURES_PATH)
+    futures["Timestamp"] = pd.to_datetime(futures["Timestamp"]).dt.normalize()
+    futures = futures.loc[
+        futures["futures_id"].astype(str).eq("TX")
+        & ~futures["contract_date"].astype(str).str.contains("/", na=False)
+    ].copy()
+    front = futures.groupby(["Timestamp", "trading_session"])[
+        "contract_date"
+    ].transform("min")
+    futures = futures.loc[futures["contract_date"].astype(str).eq(front.astype(str))]
+    futures = futures.drop_duplicates(
+        ["Timestamp", "trading_session"], keep="last"
+    ).set_index("Timestamp")
     if futures.empty:
-        raise RuntimeError("FinMind returned no TX futures data.")
+        raise RuntimeError("Shared TX futures file is empty.")
 
     futures.index = pd.to_datetime(futures.index)
     day = futures[futures["trading_session"] == "position"].copy()
@@ -100,12 +109,15 @@ def capture_tx_day_features(
     if features.empty:
         raise RuntimeError("No day-session TX futures rows after filtering.")
 
-    twse = GetInfoTWSE()
-    raw_night = twse.get_institution_option_position(
-        trading_session="night",
-        start_time=start_str,
-        end_time=end_str,
-    )
+    if not OPTION_NIGHT_PATH.exists():
+        raise FileNotFoundError(
+            f"{OPTION_NIGHT_PATH} is missing. Update it from /Users/xinc/GitHub/note."
+        )
+    raw_night = pd.read_parquet(OPTION_NIGHT_PATH)
+    if "date" in raw_night.columns:
+        raw_night["date"] = pd.to_datetime(raw_night["date"])
+        raw_night = raw_night.set_index("date")
+    raw_night = raw_night.loc[start_ts:end_ts]
     foreign_signal = _build_foreign_opt_signal_a(raw_night)
     features = features.join(foreign_signal, how="left")
 
