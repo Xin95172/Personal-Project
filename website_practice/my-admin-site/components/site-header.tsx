@@ -8,6 +8,7 @@ export default function SiteHeader() {
     ["/faq", "FAQ"],
     ["/qa", "互動問答"],
     ["/columns", "專欄"],
+    ["/discussions", "商標討論"],
     ["/tools", "實用工具"],
   ];
 
