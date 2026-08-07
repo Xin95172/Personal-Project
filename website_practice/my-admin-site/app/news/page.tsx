@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import SiteHeader from "@/components/site-header";
+import { createClient } from "@/lib/supabase/server";
+import { connection } from "next/server";
 
-const articles = [
-  ["商標申請前，為什麼一定要先做檢索？", "申請前的檢索能協助辨識文字或圖樣近似的既有案件，為品牌決策保留更多空間。"],
-  ["品牌剛起步，商標分類怎麼開始看？", "從您現在提供的商品或服務出發，再預留合理的發展方向，逐步建立保護範圍。"],
-  ["公司名稱、網域與商標：三者的差異", "三種名稱各自具有不同的功能與保護機制，及早規劃才能減少後續調整成本。"],
-];
-export default function NewsPage() { return <div className="min-h-screen bg-[#fbfaf7]"><SiteHeader/><main className="mx-auto max-w-6xl px-5 py-16 lg:px-8"><p className="text-sm font-bold tracking-[.15em] text-[#a57a2c]">TRADEMARK NOTES</p><h1 className="mt-4 text-4xl font-bold text-[#173f3b]">商標新聞與觀點</h1><div className="mt-10 grid gap-6 md:grid-cols-3">{articles.map(([title, intro], i) => <article className="rounded-2xl border border-stone-200 bg-white p-7" key={title}><p className="text-sm font-bold text-[#a57a2c]">INSIGHT · 0{i+1}</p><h2 className="mt-12 text-xl font-bold leading-8 text-[#173f3b]">{title}</h2><p className="mt-4 leading-7 text-stone-600">{intro}</p><Link href="/contact" className="mt-8 inline-flex items-center gap-2 text-sm font-bold text-[#173f3b]">與我們討論 <ArrowRight size={16}/></Link></article>)}</div></main></div>; }
+export default async function NewsPage() {
+  await connection();
+  const supabase = await createClient();
+  const { data: articles } = await supabase.from("articles").select("id, title, excerpt, content, author_name, created_at").eq("status", "published").order("created_at", { ascending: false });
+  return <div className="min-h-screen bg-[#fbfaf7]"><SiteHeader/><main className="mx-auto max-w-6xl px-5 py-16 lg:px-8"><p className="text-sm font-bold tracking-[.15em] text-[#a57a2c]">TRADEMARK NOTES</p><h1 className="mt-4 text-4xl font-bold text-[#173f3b]">商標觀點與最新文章</h1><p className="mt-4 max-w-2xl leading-7 text-stone-600">由網站管理員發布的文章會即時顯示在這裡。</p><div className="mt-10 grid gap-6 md:grid-cols-3">{articles?.map((article, i) => <article className="rounded-2xl border border-stone-200 bg-white p-7" key={article.id}><p className="text-sm font-bold text-[#a57a2c]">INSIGHT · {String(i + 1).padStart(2, "0")}</p><h2 className="mt-10 text-xl font-bold leading-8 text-[#173f3b]">{article.title}</h2><p className="mt-3 text-sm text-stone-500">{article.author_name}</p><p className="mt-4 whitespace-pre-line leading-7 text-stone-600">{article.excerpt || article.content.slice(0, 140)}</p><Link href="/contact" className="mt-8 inline-flex items-center gap-2 text-sm font-bold text-[#173f3b]">洽詢服務<ArrowRight size={16}/></Link></article>)}{!articles?.length && <p className="col-span-full rounded-2xl border border-dashed border-stone-300 p-10 text-center text-stone-500">目前尚無已發布文章。</p>}</div></main></div>;
+}
