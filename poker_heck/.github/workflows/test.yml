@@ -1,0 +1,23 @@
+name: Solver tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: solver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pytest --cov=engine --cov=solver_core --cov=api --cov-branch --cov-report=term-missing
+      - run: python train_river.py examples/river_demo.json --iterations 25
+      - run: python train_river.py examples/flop_demo.json --iterations 5
+      - run: python train_preflop.py examples/preflop_8max_demo.json --iterations 1

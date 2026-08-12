@@ -1,0 +1,20 @@
+{
+  "strategy_db": "../artifacts/data/multiway_strategies.sqlite3",
+  "output_dir": "../artifacts/generated/multiway_packs",
+  "manifest": "../artifacts/generated/multiway_manifest.json",
+  "checkpoint_dir": "../artifacts/checkpoints",
+  "stack_bb": [40, 60, 100],
+  "player_counts": [2, 3, 4, 5, 6, 7, 8],
+  "solve_scope": "flop_full_tree",
+  "preflop_route_policy": {"open_sizes_bb": [2.0, 2.5, 3.0], "re_raise_multipliers": [2.5, 3.5], "include_all_in": true, "max_raises": 2},
+  "max_preflop_routes_per_stack": null,
+  "range_spec": {"kind": "all_combos"},
+  "board_source": "canonical",
+  "max_canonical_boards": null,
+  "sizing_policy": {"bet_sizes": [0.33, 0.5, 0.75, 1.0, 1.5, 2.0], "raise_sizes": [0.33, 0.5, 0.75, 1.0, 1.5, 2.0], "include_all_in": true, "max_re_raises": 1},
+  "iterations_per_pack": 1000,
+  "checkpoint_every": 100,
+  "seed_start": 1,
+  "solver_version": "multiway-postflop-grid-v1",
+  "job_options": {"export_all_routes": true, "quality_report": false}
+}

@@ -1,0 +1,23 @@
+{
+  "strategy_db": "../artifacts/data/heads_up_grid_strategies.sqlite3",
+  "output_dir": "../artifacts/generated/heads_up_packs",
+  "manifest": "../artifacts/generated/heads_up_manifest.json",
+  "stack_bb": [40, 60, 100],
+  "pot_profiles_bb": {"single_raised": 6, "three_bet": 18},
+  "streets": ["flop", "turn", "river"],
+  "board_source": "canonical",
+  "max_canonical_boards_per_street": null,
+  "oop_range_spec": {"kind": "all_combos"},
+  "ip_range_spec": {"kind": "all_combos"},
+  "sizing_policy": {"bet_sizes": [0.33, 0.5, 0.75, 1.0, 1.5, 2.0], "raise_sizes": [0.33, 0.5, 0.75, 1.0, 1.5, 2.0], "include_all_in": true, "max_re_raises": 1},
+  "iterations_per_pack": 1000,
+  "checkpoint_every": 100,
+  "checkpoint_dir": "../artifacts/checkpoints",
+  "seed_start": 1,
+  "solver_version": "heads-up-grid-v1",
+  "job_options": {"export_all_routes": true, "quality_report_on_river": true},
+  "priority_tiers": [
+    {"streets": ["river"], "stack_bb": [100], "pot_profiles": ["single_raised"]},
+    {"streets": ["flop", "turn"], "stack_bb": [100], "pot_profiles": ["single_raised"]}
+  ]
+}

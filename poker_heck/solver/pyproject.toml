@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "poker-heck-solver"
+version = "0.1.0"
+description = "8-Max No-Limit Texas Hold'em strategy solver"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi==0.115.12",
+  "uvicorn==0.34.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.4.2",
+  "pytest-cov==6.2.1",
+]
+
+[project.scripts]
+poker-serve = "poker_solver.cli.serve_api:main"
+poker-train-river = "poker_solver.cli.train_river:main"
+poker-train-preflop = "poker_solver.cli.train_preflop:main"
+poker-train-multiway = "poker_solver.cli.train_multiway_postflop:main"
+poker-build-db = "poker_solver.cli.build_strategy_db:main"
+poker-generate-packs = "poker_solver.generators.multiway:main"
+poker-generate-heads-up-packs = "poker_solver.generators.heads_up:main"
+poker-generate-preflop-packs = "poker_solver.generators.preflop:main"
+poker-clean = "poker_solver.cli.clean:main"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["poker_solver*"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+python_files = ["test_*.py"]
+
+[tool.coverage.run]
+branch = true
+source = ["poker_solver.engine", "poker_solver.solver_core", "poker_solver.api"]
+data_file = "artifacts/.coverage"
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 90
