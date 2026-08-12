@@ -11,6 +11,16 @@
     "include_all_in": true,
     "max_raises": 2
   },
+  "continuation": {
+    "enabled": true,
+    "subgame_iterations": 100,
+    "value_rollouts": 4,
+    "max_cached_subgames": 500,
+    "bet_sizes": [0.33, 0.5, 0.75, 1.0, 1.5, 2.0],
+    "raise_sizes": [0.33, 0.5, 0.75, 1.0, 1.5, 2.0],
+    "include_all_in": true,
+    "max_re_raises": 1
+  },
   "iterations_per_pack": 1000,
   "checkpoint_every": 100,
   "seed_start": 1,

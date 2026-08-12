@@ -6,6 +6,7 @@ from pathlib import Path
 from poker_solver.engine.preflop_policy import PreflopSizingPolicy
 from poker_solver.engine.table import Position
 from poker_solver.solver_core.preflop_mccfr import MultiwayPreflopMCCFRTrainer
+from poker_solver.solver_core.integrated_solver import ContinuationSettings, attach_postflop_continuation
 from poker_solver.solver_core.range_spec import expand_range_spec
 from poker_solver.solver_core.river_mccfr import Combo, WeightedRange
 
@@ -16,7 +17,7 @@ def load_preflop_trainer(path: str | Path) -> MultiwayPreflopMCCFRTrainer:
     try:
         ranges = _load_ranges(raw)
         sizing = raw.get("sizing_policy", {})
-        return MultiwayPreflopMCCFRTrainer(
+        trainer = MultiwayPreflopMCCFRTrainer(
             ranges=ranges,
             sizing_policy=PreflopSizingPolicy(
                 open_sizes_bb=tuple(sizing.get("open_sizes_bb", (2.0, 2.5, 3.0))),
@@ -27,6 +28,23 @@ def load_preflop_trainer(path: str | Path) -> MultiwayPreflopMCCFRTrainer:
             stack_bb=raw.get("stack_bb", 100),
             seed=int(raw.get("seed", 0)),
         )
+        continuation = raw.get("continuation")
+        if continuation is not None:
+            if not isinstance(continuation, dict) or not bool(continuation.get("enabled", False)):
+                raise ValueError("continuation must be an object with enabled=true")
+            attach_postflop_continuation(
+                trainer,
+                ContinuationSettings(
+                    subgame_iterations=int(continuation.get("subgame_iterations", 100)),
+                    value_rollouts=int(continuation.get("value_rollouts", 4)),
+                    max_cached_subgames=continuation.get("max_cached_subgames"),
+                    bet_sizes=tuple(continuation.get("bet_sizes", (0.33, 0.5, 0.75, 1.0, 1.5, 2.0))),
+                    raise_sizes=tuple(continuation.get("raise_sizes", (0.33, 0.5, 0.75, 1.0, 1.5, 2.0))),
+                    include_all_in=bool(continuation.get("include_all_in", True)),
+                    max_re_raises=continuation.get("max_re_raises", 1),
+                ),
+            )
+        return trainer
     except (KeyError, TypeError, ValueError) as error:
         raise ValueError(f"invalid preflop solve configuration: {error}") from error
 

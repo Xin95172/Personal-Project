@@ -66,6 +66,20 @@ class MultiwayPostflopMCCFRTrainer:
             raise KeyError("this information set has not been visited during training")
         return self.infosets[key].average_strategy()
 
+    def average_strategy_utility(self, state: MultiwayPostflopState, holes: dict[Position, tuple[str, str]]) -> dict[Position, int]:
+        """以目前平均策略 rollout 一次，回傳所有位置的 continuation utility。"""
+        if is_multiway_postflop_terminal(state):
+            return settle_multiway_postflop(state, holes)[1]
+        if state.betting_complete:
+            card = self.rng.choice(remaining_cards((*state.board, *(card for combo in holes.values() for card in combo))))
+            return self.average_strategy_utility(advance_multiway_postflop_street(state, card), holes)
+        assert state.current_player is not None
+        actions = abstract_multiway_postflop_actions(state, self.sizing_policy)
+        key = _infoset_key(state, state.current_player, holes[state.current_player])
+        strategy = self.infosets[key].average_strategy() if key in self.infosets else {action: 1.0 / len(actions) for action in actions}
+        action = _sample_action(strategy, self.rng)
+        return self.average_strategy_utility(apply_multiway_postflop_action(state, action), holes)
+
     def _sample_deal(self) -> dict[Position, tuple[str, str]]:
         board = self.initial_state.board
         for _ in range(10_000):

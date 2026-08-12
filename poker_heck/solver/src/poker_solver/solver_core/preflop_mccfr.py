@@ -2,7 +2,7 @@
 
 from random import Random
 from time import perf_counter
-from typing import Mapping
+from typing import Callable, Mapping
 
 from poker_solver.engine.chance import remaining_cards
 from poker_solver.engine.preflop_policy import PreflopSizingPolicy, abstract_actions
@@ -10,6 +10,9 @@ from poker_solver.engine.river_game import Action
 from poker_solver.engine.showdown import settle_multiway_showdown
 from poker_solver.engine.table import Position, PreflopState, apply_action, create_8max_preflop, is_terminal
 from poker_solver.solver_core.river_mccfr import InfoSet, TrainingStats, WeightedRange, _sample_action
+
+
+ContinuationUtility = Callable[[PreflopState, dict[Position, tuple[str, str]]], Mapping[Position, int | float]]
 
 
 class MultiwayPreflopMCCFRTrainer:
@@ -22,6 +25,7 @@ class MultiwayPreflopMCCFRTrainer:
         sizing_policy: PreflopSizingPolicy | None = None,
         stack_bb: int | float | str = 100,
         seed: int = 0,
+        continuation_utility: ContinuationUtility | None = None,
     ) -> None:
         if set(ranges) != set(Position):
             raise ValueError("ranges must provide every 8-Max position")
@@ -29,6 +33,7 @@ class MultiwayPreflopMCCFRTrainer:
         self.sizing_policy = sizing_policy or PreflopSizingPolicy()
         self.stack_bb = stack_bb
         self.rng = Random(seed)
+        self.continuation_utility = continuation_utility
         self.infosets: dict[tuple[object, ...], InfoSet] = {}
         self.iterations_completed = 0
 
@@ -100,6 +105,11 @@ class MultiwayPreflopMCCFRTrainer:
         if len(active) == 1:
             winner = active[0].position
             return {player.position: (state.pot - player.committed_total if player.position is winner else -player.committed_total) for player in state.players}
+        if self.continuation_utility is not None:
+            utility = self.continuation_utility(state, holes)
+            if set(utility) != set(Position):
+                raise ValueError("continuation utility must provide every 8-Max position")
+            return {position: int(round(utility[position])) for position in Position}
         known = [card for cards in holes.values() for card in cards]
         board = remaining_cards(known)
         sampled_board = tuple(board[index] for index in self.rng.sample(range(len(board)), 5))

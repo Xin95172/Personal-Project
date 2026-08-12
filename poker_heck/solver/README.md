@@ -1,32 +1,66 @@
 # Poker Heck Solver
 
-這是一個用 MCCFR 建立 8-Max No-Limit Texas Hold'em 近似策略庫的專案。它不是精確閉式 GTO solver：策略品質取決於遊戲樹、range、下注尺寸 abstraction 與訓練迭代數。
+這是一個以 MCCFR（Monte Carlo Counterfactual Regret Minimization）訓練的德州撲克策略資料庫專案。它不是「精確求解整個 8-Max 無限注德州撲克」的引擎；而是在明確定義的牌局、範圍、牌面與下注尺寸抽象下，逐個子局逼近納許均衡策略，並將結果放入 SQLite 供 API 即時查詢。
 
-## 專案入口
+目前涵蓋 preflop、heads-up postflop，以及 2 至 8 人的 multiway postflop 抽象。每個訓練包都由設定檔與產生器建立，因此訓練範圍可擴充，不依賴手寫 demo 牌局。
+
+## 快速開始
+
+在此目錄安裝開發環境：
 
 ```powershell
 python -m pip install -e ".[dev]"
-
-# 產生與訓練 preflop、heads-up postflop、multiway postflop 網格
-poker-generate-preflop-packs configs\preflop_solution_grid.json
-poker-build-db artifacts\generated\preflop_manifest.json
 ```
 
-其餘訓練指令、API 與清理方式請看 [操作手冊](docs/OPERATIONS.md)。
+先從設定檔產生訓練包，再將 manifest 交給訓練器：
 
-## 目錄
+```powershell
+python -m poker_solver.generators.preflop configs\preflop_solution_grid.json
+python -m poker_solver.cli.build_strategy_db artifacts\generated\preflop_manifest.json
 
-| 位置 | 用途 |
-|---|---|
-| `src/poker_solver/` | 引擎、MCCFR 核心、API 與 CLI。 |
-| `configs/` | 正式的訓練參數網格。 |
-| `artifacts/` | checkpoint、資料庫與產生的 pack；不納入 Git。 |
-| `tests/` | unit 與 integration 測試。 |
-| `docs/` | 操作與架構說明。 |
+python -m poker_solver.generators.heads_up configs\heads_up_solution_grid.json
+python -m poker_solver.cli.build_strategy_db artifacts\generated\heads_up_manifest.json
 
-## 核心概念
+python -m poker_solver.generators.multiway configs\multiway_solution_grid.json
+python -m poker_solver.cli.build_strategy_db artifacts\generated\multiway_manifest.json
+```
 
-- preflop 可使用完整 1,326 combo 空間，或依位置選擇前幾%牌力範圍。
-- postflop 使用花色同構化的 canonical board，避免重複訓練等價牌面。
-- 下注尺寸採 pot-ratio abstraction：33%、50%、75%、100%、150%、200% 與 all-in。
-- API 只回傳已訓練／已存入策略庫的資訊集；查不到時應重新求解或回傳找不到，而不是冒充精確策略。
+這三組命令不帶任何 pack 上限，會依各 manifest 的順序逐包訓練。先只做小規模驗證時，請暫時在設定檔設定 `max_canonical_boards` 或 `max_preflop_routes_per_stack`，完成驗證後再改回 `null`。訓練會將 checkpoint、品質報告與策略寫到 `artifacts/`；此目錄是可再生輸出，不納入版控。
+
+啟動查詢 API：
+
+```powershell
+poker-serve artifacts\checkpoints\river.pkl --strategy-db artifacts\data\river_strategies.sqlite3
+```
+
+開啟 `http://127.0.0.1:8000/docs`，可直接從 Swagger 測試 `/health`、`/v1/decision` 與舊版 river 查詢端點。
+
+## 專案結構
+
+```text
+configs/                 可修改的訓練範圍與抽象設定
+docs/                    操作與資料流說明
+src/poker_solver/
+  api/                   FastAPI 服務
+  cli/                   訓練、建庫、啟動與清理命令
+  engine/                遊戲狀態、牌局規則、底池與攤牌
+  generators/            從設定產生完整訓練包
+  solver_core/           MCCFR、範圍、checkpoint、SQLite 儲存
+tests/                   單元、整合與端對端測試
+artifacts/               訓練結果；可刪除並重新產生
+```
+
+## 文件入口
+
+- [操作與資料流](docs/OPERATIONS.md)
+- [所有可調整參數](configs/README.md)
+
+## 驗證與清理
+
+```powershell
+python -m pytest
+python -m pytest --cov=poker_solver --cov-report=term-missing
+poker-clean --cache --empty
+```
+
+若要刪除訓練產物，使用 `poker-clean --all`。它會刪除整個 `artifacts/`，包含 checkpoint 與 SQLite 策略庫，請只在確定不再需要它們時執行。

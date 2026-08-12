@@ -30,6 +30,8 @@ def build_jobs(raw: dict[str, Any], output: Path) -> list[tuple[dict[str, Any], 
     for seed, stack in enumerate(stacks, start=int(raw["seed_start"])):
         stem = f"pf_{seed:03d}_{stack}bb"
         config = {"stack_bb": stack, "range_spec": raw["range_spec"], "sizing_policy": raw["sizing_policy"], "seed": seed}
+        if "continuation" in raw:
+            config["continuation"] = raw["continuation"]
         options = raw["job_options"]
         jobs.append(({
             "game_type": "preflop_8max", "config": f"{output.name}/{stem}.json",
@@ -44,3 +46,7 @@ def build_jobs(raw: dict[str, Any], output: Path) -> list[tuple[dict[str, Any], 
 def _resolve(base: Path, value: str) -> Path:
     path = Path(value)
     return path if path.is_absolute() else (base / path).resolve()
+
+
+if __name__ == "__main__":
+    main()

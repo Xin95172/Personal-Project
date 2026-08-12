@@ -43,3 +43,7 @@ def build_jobs(raw: dict[str, Any], output: Path) -> list[tuple[dict[str, Any], 
 def _resolve(base: Path, value: str) -> Path:
     candidate = Path(value)
     return candidate if candidate.is_absolute() else (base / candidate).resolve()
+
+
+if __name__ == "__main__":
+    main()
