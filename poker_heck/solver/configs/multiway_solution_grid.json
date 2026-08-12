@@ -7,6 +7,7 @@
   "player_counts": [2, 3, 4, 5, 6, 7, 8],
   "solve_scope": "flop_full_tree",
   "preflop_route_policy": {"open_sizes_bb": [2.0, 2.5, 3.0], "re_raise_multipliers": [2.5, 3.5], "include_all_in": true, "max_raises": 2},
+  "preflop_route_offset_per_stack": 0,
   "max_preflop_routes_per_stack": null,
   "range_spec": {"kind": "all_combos"},
   "board_source": "canonical",

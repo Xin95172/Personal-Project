@@ -22,7 +22,7 @@ def build_jobs(raw: dict[str,Any], output: Path) -> list[tuple[dict[str,Any],dic
     if raw["solve_scope"] != "flop_full_tree":
         raise ValueError("multiway grid solve_scope must be flop_full_tree; turn/river use a conditional subgame config")
     stacks=tuple(int(x) for x in raw["stack_bb"]); counts=set(raw["player_counts"]); boards=_boards(raw); policy=PreflopSizingPolicy(**raw["preflop_route_policy"])
-    routes=[(stack,route) for stack in stacks for route in _routes(stack,policy,counts,raw["max_preflop_routes_per_stack"])]
+    routes=[(stack,route) for stack in stacks for route in _routes(stack,policy,counts,raw["preflop_route_offset_per_stack"],raw["max_preflop_routes_per_stack"])]
     keys=[(stack,route_id,actions,board_id,board) for stack,(route_id,count,actions) in routes for board_id,board in boards.items()]
     jobs=[]
     for seed,(stack,route_id,actions,board_id,board) in enumerate(keys,start=int(raw["seed_start"])):
@@ -32,13 +32,22 @@ def build_jobs(raw: dict[str,Any], output: Path) -> list[tuple[dict[str,Any],dic
         jobs.append(({"game_type":"multiway_postflop","config":f"{output.name}/{stem}.json","range_profile_id":f"{raw['range_spec']['kind']}-{route_id}-{board_id}-{stack}bb","solver_version":raw["solver_version"],"iterations":int(raw["iterations_per_pack"]),"checkpoint":f"{raw['checkpoint_dir']}/{stem}.pkl","checkpoint_every":int(raw["checkpoint_every"]),"export_all_routes":bool(opt["export_all_routes"]),"quality_report":bool(opt["quality_report"])},config))
     return jobs
 
-def _routes(stack:int, policy:PreflopSizingPolicy, counts:set[int], limit:int|None) -> list[tuple[str,int,list[dict[str,Any]]]]:
+def _routes(stack:int, policy:PreflopSizingPolicy, counts:set[int], offset:int, limit:int|None) -> list[tuple[str,int,list[dict[str,Any]]]]:
+    if offset < 0 or (limit is not None and limit <= 0):
+        raise ValueError("preflop route offset must be non-negative and limit must be positive or null")
     result=[]
+    matched=0
     def walk(state):
+        nonlocal matched
         if limit is not None and len(result) >= limit: return
         if is_terminal(state):
             if not state.hand_ended:
-                active=sum(not p.folded for p in state.players); actions=[_action(a) for a in state.action_history]; result.append((f"p{active}_{len(result)+1:06d}",active,actions))
+                active=sum(not p.folded for p in state.players)
+                if active in counts:
+                    matched += 1
+                    if matched > offset:
+                        actions=[_action(a) for a in state.action_history]
+                        result.append((f"p{active}_{matched:06d}",active,actions))
             return
         for action in abstract_actions(state,policy): walk(apply_action(state,action))
     walk(create_8max_preflop(stack_bb=stack)); return result

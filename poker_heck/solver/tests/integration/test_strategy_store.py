@@ -143,8 +143,8 @@ def test_river_tree_export_reports_coverage_and_stores_non_root_routes(tmp_path)
     trainer = _trainer()
     store = StrategyStore(tmp_path / "strategies.sqlite3")
     report = export_river_tree(store, trainer, range_profile_id="tree-test")
-    assert report.reachable_infosets >= report.stored_infosets > 1
-    assert report.unvisited_infosets == report.reachable_infosets - report.stored_infosets
+    assert report.reachable_infosets == report.stored_infosets == len(trainer.infosets)
+    assert report.unvisited_infosets == 0
 
 
 def test_preflop_and_multiway_roots_share_the_generic_strategy_store(tmp_path):
@@ -174,3 +174,21 @@ def test_preflop_and_multiway_roots_share_the_generic_strategy_store(tmp_path):
     assert store.lookup(multi_record.context) is not None
     assert export_preflop_infosets(store, preflop, range_profile_id="preflop-all").stored_infosets == len(preflop.infosets)
     assert export_multiway_postflop_infosets(store, multiway, range_profile_id="multiway-all").stored_infosets == len(multiway.infosets)
+
+
+def test_multiway_export_uses_remaining_players_not_all_eight_seats(tmp_path):
+    cards = tuple((f"{rank}c", f"{rank}d") for rank in "23456789")
+    ranges = {position: WeightedRange.from_cards((cards[index],)) for index, position in enumerate(Position)}
+    state = create_8max_preflop()
+    for _ in range(6):
+        state = apply_action(state, Action(ActionType.FOLD))
+    state = apply_action(state, Action(ActionType.CALL))
+    state = apply_action(state, Action(ActionType.CHECK))
+    trainer = MultiwayPostflopMCCFRTrainer(initial_state=advance_preflop_to_flop(state, ("As", "Kh", "Qh")), ranges=ranges, sizing_policy=MultiwayPostflopSizingPolicy(bet_sizes=(0.5,), raise_sizes=(), include_all_in=False, max_re_raises=0), seed=1)
+    trainer.train(1)
+    store = StrategyStore(tmp_path / "strategies.sqlite3")
+    export_multiway_postflop_infosets(store, trainer, range_profile_id="active-count")
+    key = next(iter(trainer.infosets))
+    position, hole_cards, street, board, pot, _bet, _raise, _seats, history = key
+    found = store.lookup(StrategyContext("multiway_postflop", street, 2, position, tuple(sorted(hole_cards)), tuple(board), pot, max(player.stack for player in trainer.initial_state.players), tuple(history), "active-count", "multiway-postflop-v1"))
+    assert found is not None

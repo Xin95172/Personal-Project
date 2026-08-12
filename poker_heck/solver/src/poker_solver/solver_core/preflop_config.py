@@ -1,13 +1,12 @@
 """8-Max preflop solver JSON 設定。"""
 
 import json
-from itertools import combinations
-from math import ceil
 from pathlib import Path
 
 from poker_solver.engine.preflop_policy import PreflopSizingPolicy
 from poker_solver.engine.table import Position
 from poker_solver.solver_core.preflop_mccfr import MultiwayPreflopMCCFRTrainer
+from poker_solver.solver_core.range_spec import expand_range_spec
 from poker_solver.solver_core.river_mccfr import Combo, WeightedRange
 
 
@@ -47,44 +46,10 @@ def _load_ranges(raw: dict[str, object]) -> dict[Position, WeightedRange]:
     spec = raw.get("range_spec")
     if not isinstance(spec, dict):
         raise ValueError("range_spec must be an object")
-    kind = spec.get("kind")
-    if kind == "all_combos":
-        full_range = _all_combos()
-        return {position: full_range for position in Position}
-    if kind == "top_percent":
-        default_percent = spec.get("percent")
-        overrides = spec.get("percent_by_position", {})
-        if not isinstance(overrides, dict):
-            raise ValueError("percent_by_position must be an object")
-        return {
-            position: _top_percent(float(overrides.get(position.value, default_percent)))
-            for position in Position
-        }
-    raise ValueError("range_spec.kind must be all_combos or top_percent")
-
-
-def _all_combos() -> WeightedRange:
-    return WeightedRange(tuple(Combo(cards) for cards in combinations(_DECK, 2)))
-
-
-def _top_percent(percent: float) -> WeightedRange:
-    """依可重現的 preflop 起手牌強度排序取前百分比，不指定個別實體牌。"""
-    if not 0 < percent <= 100:
-        raise ValueError("top_percent percent must be in (0, 100]")
-    ordered = sorted(combinations(_DECK, 2), key=lambda cards: (_hand_strength(cards), cards), reverse=True)
-    count = ceil(len(ordered) * percent / 100)
-    return WeightedRange(tuple(Combo(cards) for cards in ordered[:count]))
-
-
-def _hand_strength(cards: tuple[str, str]) -> int:
-    """簡潔、可重現的牌力排序；pair 優先，其次高張、suited 與連接性。"""
-    first, second = ("23456789TJQKA".index(card[0]) + 2 for card in cards)
-    high, low = max(first, second), min(first, second)
-    if high == low:
-        return 10_000 + high
-    suited_bonus = 8 if cards[0][1] == cards[1][1] else 0
-    gap_penalty = max(0, high - low - 1) * 3
-    return high * 100 + low * 5 + suited_bonus - gap_penalty
-
-
-_DECK = tuple(f"{rank}{suit}" for rank in "23456789TJQKA" for suit in "cdhs")
+    overrides = spec.get("percent_by_position", {})
+    if not isinstance(overrides, dict):
+        raise ValueError("percent_by_position must be an object")
+    return {
+        position: expand_range_spec({**spec, "percent": overrides.get(position.value, spec.get("percent"))})
+        for position in Position
+    }

@@ -27,6 +27,7 @@ poker-build-db = "poker_solver.cli.build_strategy_db:main"
 poker-generate-packs = "poker_solver.generators.multiway:main"
 poker-generate-heads-up-packs = "poker_solver.generators.heads_up:main"
 poker-generate-preflop-packs = "poker_solver.generators.preflop:main"
+poker-generate-conditional-subgames = "poker_solver.generators.conditional_subgames:main"
 poker-clean = "poker_solver.cli.clean:main"
 
 [tool.setuptools.package-dir]

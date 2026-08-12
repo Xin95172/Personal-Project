@@ -1,22 +1,19 @@
 {
-  "strategy_db": "../artifacts/data/preflop_grid_strategies.sqlite3",
+  "strategy_db": "../artifacts/data/preflop_strategies.sqlite3",
   "output_dir": "../artifacts/generated/preflop_packs",
   "manifest": "../artifacts/generated/preflop_manifest.json",
+  "checkpoint_dir": "../artifacts/checkpoints",
   "stack_bb": [40, 60, 100],
-  "range_profiles": {
-    "full_combo_space": {
-      "kind": "all_combos"
-    }
-  },
-  "action_profiles": {
-    "open_only": {"open_sizes_bb": [2.0, 2.5, 3.0], "re_raise_multipliers": [2.5], "include_all_in": true, "max_raises": 1},
-    "three_bet": {"open_sizes_bb": [2.0, 2.5, 3.0], "re_raise_multipliers": [2.5, 3.5], "include_all_in": true, "max_raises": 2}
+  "range_spec": {"kind": "all_combos"},
+  "sizing_policy": {
+    "open_sizes_bb": [2.0, 2.5, 3.0],
+    "re_raise_multipliers": [2.5, 3.5],
+    "include_all_in": true,
+    "max_raises": 2
   },
   "iterations_per_pack": 1000,
   "checkpoint_every": 100,
-  "checkpoint_dir": "../artifacts/checkpoints",
   "seed_start": 1,
   "solver_version": "preflop-grid-v1",
-  "job_options": {"export_all_routes": true, "quality_report": false},
-  "priority_tiers": [{"stack_bb": [100], "range_profiles": ["full_combo_space"], "action_profiles": ["open_only", "three_bet"]}]
+  "job_options": {"export_all_routes": true, "quality_report": false}
 }

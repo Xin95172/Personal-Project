@@ -26,18 +26,19 @@ def load_multiway_postflop_trainer(path: str | Path) -> MultiwayPostflopMCCFRTra
             preflop = apply_action(preflop, Action(kind, amount))
         if not is_terminal(preflop) or preflop.hand_ended:
             raise ValueError("preflop_actions must finish a non-fold preflop round")
-        board = tuple(raw["board"])
+        board = tuple(raw["board"] if "board" in raw else raw["flop"])
         if len(board) not in {3, 4, 5}:
             raise ValueError("board must contain 3, 4, or 5 cards")
         state = advance_preflop_to_flop(preflop, board[:3])
-        for next_card, street_actions in zip(board[3:], raw["completed_street_actions"]):
+        completed_actions = raw.get("completed_street_actions", [])
+        for next_card, street_actions in zip(board[3:], completed_actions):
             for entry in street_actions:
                 action = Action(ActionType(entry["kind"]), bb_to_units(entry["amount_bb"]) if "amount_bb" in entry else None)
                 state = apply_multiway_postflop_action(state, action)
             if not state.betting_complete:
                 raise ValueError("each completed_street_actions entry must finish its street")
             state = advance_multiway_postflop_street(state, next_card)
-        if len(raw["completed_street_actions"]) != len(board) - 3:
+        if len(completed_actions) != len(board) - 3:
             raise ValueError("completed_street_actions count must match board street")
         ranges = _load_ranges(raw, board)
         policy = raw.get("sizing_policy", {})
@@ -57,12 +58,16 @@ def load_multiway_postflop_trainer(path: str | Path) -> MultiwayPostflopMCCFRTra
 
 
 def _load_ranges(raw: dict, board: tuple[str, ...]):
-    if raw.get("range_spec", {}).get("kind") == "all_combos":
-        full = expand_range_spec(raw["range_spec"], excluded_cards=board)
-        return {position: full for position in Position}
-    return {
-            position: WeightedRange(
-                tuple(Combo(tuple(entry["cards"]), float(entry.get("weight", 1.0))) for entry in raw["ranges"][position.value])  # type: ignore[arg-type]
-            )
+    if "range_spec" not in raw:
+        return {
+            position: WeightedRange(tuple(Combo(tuple(entry["cards"]), float(entry.get("weight", 1.0))) for entry in raw["ranges"][position.value]))
             for position in Position
         }
+    spec = raw["range_spec"]
+    overrides = spec.get("percent_by_position", {})
+    if not isinstance(overrides, dict):
+        raise ValueError("range_spec.percent_by_position must be an object")
+    return {
+        position: expand_range_spec({**spec, "percent": overrides.get(position.value, spec.get("percent"))}, excluded_cards=board)
+        for position in Position
+    }

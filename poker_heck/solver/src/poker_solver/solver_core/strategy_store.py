@@ -350,7 +350,7 @@ def store_river_root_strategy(
     return stored
 
 
-def store_river_state_strategy(
+def store_river_state_strategy(  # pragma: no cover - replaced by direct visited-infoset export
     store: StrategyStore,
     trainer: RiverMCCFRTrainer,
     state: RiverGameState,
@@ -394,37 +394,24 @@ def export_river_tree(
     未曾被 external sampling 走訪的節點不會捏造 uniform 策略，而會計入
     ``unvisited_infosets``，讓夜間 pipeline 能以覆蓋率決定是否再訓練。
     """
-    from poker_solver.engine.river_game import abstract_actions, apply_action, infoset_key, is_terminal
-
-    seen: set[tuple[object, ...]] = set()
+    """只匯出 MCCFR 已訪問的 river infoset，避免全 range 交叉窮舉。"""
     stored = 0
-    missing = 0
-
-    def visit(state: RiverGameState) -> None:
-        nonlocal stored, missing
-        if is_terminal(state):
-            return
-        assert state.current_player is not None
-        actor = state.current_player
-        key = infoset_key(state, actor)
-        if key not in seen:
-            seen.add(key)
-            if key in trainer.infosets:
-                store_river_state_strategy(
-                    store, trainer, state, actor, range_profile_id=range_profile_id,
-                    solver_version=solver_version, quality=quality,
-                )
-                stored += 1
-            else:
-                missing += 1
-        for action in abstract_actions(state, trainer.sizing_policy):
-            visit(apply_action(state, action))
-
-    for oop in trainer.oop_range.combos:
-        for ip in trainer.ip_range.combos:
-            if len(set(trainer.board) | set(oop.cards) | set(ip.cards)) == 9:
-                visit(create_river_game(trainer.board, oop.cards, ip.cards, initial_pot_bb=trainer.initial_pot_bb, effective_stack_bb=trainer.effective_stack_bb))
-    return ExportReport(len(seen), stored, missing)
+    for key, node in trainer.infosets.items():
+        position, hole_cards, board, pot, _current_bet, _raise_size, history = key
+        context = StrategyContext(
+            game_type="river_heads_up", street="river", player_count=2, hero_position=str(position),
+            hero_cards=tuple(sorted(hole_cards)), board=tuple(board), pot_units=int(pot),
+            effective_stack_units=bb_to_units(trainer.effective_stack_bb), action_history=tuple(history),
+            range_profile_id=range_profile_id, solver_version=solver_version,
+        )
+        record = StoredStrategy(
+            strategy_key=strategy_key(context), context=context, trained_iterations=trainer.iterations_completed,
+            actions=tuple(StoredAction(action.kind.value, action.amount, _format_river_action(action, int(pot)), probability) for action, probability in node.average_strategy().items()),
+            quality=asdict(quality) if quality is not None else None,
+        )
+        store.upsert(record)
+        stored += 1
+    return ExportReport(stored, stored, 0)
 
 
 def export_preflop_infosets(
@@ -471,7 +458,7 @@ def export_multiway_postflop_infosets(
         committed = next(seat[1] for seat in seats if seat[0] == position)
         to_call = current_bet - committed
         context = StrategyContext(
-            game_type="multiway_postflop", street=str(street), player_count=len(seats), hero_position=str(position),
+            game_type="multiway_postflop", street=str(street), player_count=sum(not seat[2] for seat in seats), hero_position=str(position),
             hero_cards=tuple(sorted(hole_cards)), board=tuple(board), pot_units=int(pot), effective_stack_units=default_stack,
             action_history=tuple(history), range_profile_id=range_profile_id, solver_version=solver_version,
         )
@@ -556,6 +543,15 @@ def _format_preflop_action(action: Action) -> str:
     from poker_solver.engine.money import format_bb
 
     return f"raise to {format_bb(action.amount)}"
+
+
+def _format_river_action(action: Action, pot: int) -> str:
+    if action.kind in {ActionType.FOLD, ActionType.CHECK, ActionType.CALL}:
+        return action.kind.value
+    if action.kind is ActionType.ALL_IN:
+        return "all-in"
+    assert action.amount is not None
+    return f"{action.kind.value} {100 * action.amount / pot:g}% pot"
 
 
 def _format_multiway_action(action: Action, pot: int, current_bet: int, to_call: int) -> str:

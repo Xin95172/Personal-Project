@@ -5,6 +5,7 @@ from poker_solver.engine.preflop_policy import PreflopSizingPolicy
 from poker_solver.engine.table import Position
 from poker_solver.solver_core.preflop_mccfr import MultiwayPreflopMCCFRTrainer
 from poker_solver.solver_core.preflop_config import load_preflop_trainer
+from poker_solver.solver_core.multiway_postflop_config import _load_ranges as load_multiway_ranges
 from poker_solver.solver_core.river_mccfr import WeightedRange
 
 
@@ -58,3 +59,13 @@ def test_preflop_top_percent_range_expands_without_fixed_cards(tmp_path):
     assert len(trainer.ranges[Position.UTG].combos) == 67
     assert len(trainer.ranges[Position.BTN].combos) == 531
     assert len(trainer.ranges[Position.MP].combos) == 133
+
+
+def test_multiway_top_percent_range_uses_shared_range_spec():
+    ranges = load_multiway_ranges(
+        {"range_spec": {"kind": "top_percent", "percent": 10, "percent_by_position": {"btn": 40}}},
+        ("As", "Kd", "Qh"),
+    )
+    # 剩餘 49 張牌共有 1,176 combos。
+    assert len(ranges[Position.UTG].combos) == 118
+    assert len(ranges[Position.BTN].combos) == 471

@@ -1,0 +1,11 @@
+{
+  "strategy_db": "../artifacts/data/multiway_strategies.sqlite3",
+  "output_dir": "../artifacts/generated/conditional_subgames",
+  "manifest": "../artifacts/generated/conditional_subgames_manifest.json",
+  "checkpoint_dir": "../artifacts/checkpoints",
+  "iterations_per_pack": 10000,
+  "checkpoint_every": 500,
+  "seed_start": 1,
+  "solver_version": "multiway-conditional-v1",
+  "subgames": []
+}
