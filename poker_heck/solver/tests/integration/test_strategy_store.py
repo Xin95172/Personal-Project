@@ -2,6 +2,8 @@ from poker_solver.engine.multiway_postflop_policy import MultiwayPostflopSizingP
 from argparse import ArgumentParser
 import json
 from pathlib import Path
+
+import pytest
 from poker_solver.cli.build_strategy_db import _run_job
 from poker_solver.generators.heads_up import build_jobs as build_heads_up_jobs
 from poker_solver.engine.preflop_policy import PreflopSizingPolicy
@@ -15,6 +17,9 @@ from poker_solver.solver_core.river_mccfr import RiverMCCFRTrainer, WeightedRang
 from poker_solver.solver_core.turn_mccfr import FlopMCCFRTrainer, TurnMCCFRTrainer
 from poker_solver.solver_core.strategy_store import (
     StrategyStore,
+    StoredAction,
+    StoredStrategy,
+    strategy_key,
     river_strategy_key,
     store_multiway_postflop_root_strategy,
     store_preflop_root_strategy,
@@ -22,6 +27,7 @@ from poker_solver.solver_core.strategy_store import (
     export_river_tree,
     export_preflop_infosets,
     export_multiway_postflop_infosets,
+    export_multiway_postflop_root_infosets,
     export_heads_up_postflop_infosets,
     store_heads_up_postflop_root_strategy,
 )
@@ -147,6 +153,58 @@ def test_river_tree_export_reports_coverage_and_stores_non_root_routes(tmp_path)
     assert report.unvisited_infosets == 0
 
 
+def test_strategy_store_batch_reuses_one_connection_until_export_finishes(tmp_path):
+    store = StrategyStore(tmp_path / "strategies.sqlite3")
+    assert store._batch_connection is None
+    with store.batch():
+        connection = store._batch_connection
+        assert connection is not None
+        with store.batch():
+            assert store._batch_connection is connection
+    assert store._batch_connection is None
+
+
+def test_strategy_store_buffered_upserts_uses_executemany_and_reports_progress(tmp_path):
+    class Progress:
+        total = 0
+
+        def update(self, count):
+            self.total += count
+
+    store = StrategyStore(tmp_path / "strategies.sqlite3")
+    progress = Progress()
+
+    def record(name):
+        context = StrategyContext("test", "river", 2, name, ("As", "Kd"), ("2c",), 100, 1000, (), "test", "v1")
+        return StoredStrategy(strategy_key(context), context, 1, (StoredAction("check", None, "check", 1.0),), None)
+
+    with store.batch(), store.buffered_upserts(batch_size=1, progress=progress):
+        store.upsert(record("first"))
+        store.upsert(record("second"))
+
+    assert progress.total == 2
+    assert store.lookup(record("first").context) is not None
+    with store.buffered_upserts():
+        with store.buffered_upserts():
+            pass
+    with pytest.raises(ValueError, match="batch_size"):
+        with store.buffered_upserts(batch_size=0):
+            pass
+    with pytest.raises(RuntimeError):
+        with store.batch(), store.buffered_upserts():
+            store.upsert(record("discarded"))
+            raise RuntimeError("中斷匯出")
+    assert store.lookup(record("discarded").context) is None
+
+
+def test_strategy_store_records_completed_pack_exports(tmp_path):
+    store = StrategyStore(tmp_path / "strategies.sqlite3")
+    assert not store.is_pack_export_complete("pack-1", trained_iterations=10, infoset_count=20)
+    store.mark_pack_export_complete("pack-1", trained_iterations=10, infoset_count=20)
+    assert store.is_pack_export_complete("pack-1", trained_iterations=10, infoset_count=20)
+    assert not store.is_pack_export_complete("pack-1", trained_iterations=11, infoset_count=20)
+
+
 def test_preflop_and_multiway_roots_share_the_generic_strategy_store(tmp_path):
     cards = (("As", "Kd"), ("Qh", "Jc"), ("Ts", "9d"), ("8h", "7c"), ("6s", "5d"), ("4h", "3c"), ("2s", "Ac"), ("Kh", "Qd"))
     ranges = {position: WeightedRange.from_cards((cards[index],)) for index, position in enumerate(Position)}
@@ -173,7 +231,11 @@ def test_preflop_and_multiway_roots_share_the_generic_strategy_store(tmp_path):
     multi_record = store_multiway_postflop_root_strategy(store, multiway, flop, Position.SB, cards[6], range_profile_id="multiway-test")
     assert store.lookup(multi_record.context) is not None
     assert export_preflop_infosets(store, preflop, range_profile_id="preflop-all").stored_infosets == len(preflop.infosets)
-    assert export_multiway_postflop_infosets(store, multiway, range_profile_id="multiway-all").stored_infosets == len(multiway.infosets)
+    with store.batch():
+        report = export_multiway_postflop_infosets(store, multiway, range_profile_id="multiway-all")
+    assert report.stored_infosets == len(multiway.infosets)
+    root_report = export_multiway_postflop_root_infosets(store, multiway, range_profile_id="multiway-root")
+    assert 0 < root_report.stored_infosets < len(multiway.infosets)
 
 
 def test_multiway_export_uses_remaining_players_not_all_eight_seats(tmp_path):

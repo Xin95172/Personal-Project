@@ -111,6 +111,7 @@ class TurnMCCFRTrainer:
             }
             node_value = sum(strategy[action] * values[action] for action in actions)
             for action in actions:
+                node.observe_action_value(action, values[action])
                 node.regret_sum[action] += values[action] - node_value
             return node_value
 

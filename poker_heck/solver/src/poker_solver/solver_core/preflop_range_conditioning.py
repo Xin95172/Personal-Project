@@ -26,7 +26,12 @@ def condition_ranges_for_terminal(
             if likelihood > 0:
                 combos.append(Combo(combo.cards, combo.weight * likelihood))
         if not combos:
-            raise ValueError(f"postflop range for {position.value} is empty after conditioning")
+            # Counterfactual action branches may have zero average probability while
+            # MCCFR is still evaluating their value.  Keep the prior range rather
+            # than creating an invalid empty postflop subgame.
+            combos = [Combo(combo.cards, combo.weight) for combo in initial_range.combos if not blocked.intersection(combo.cards)]
+        if not combos:
+            raise ValueError(f"postflop range for {position.value} is empty after card exclusion")
         result[position] = WeightedRange(tuple(combos))
     return result
 

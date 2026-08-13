@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import sqrt
 from random import Random
 from time import perf_counter
 from typing import Iterable
@@ -70,11 +71,32 @@ class InfoSet:
     actions: tuple[Action, ...]
     regret_sum: dict[Action, float] = field(init=False)
     strategy_sum: dict[Action, float] = field(init=False)
+    action_value_count: dict[Action, int] = field(init=False)
+    action_value_sum: dict[Action, float] = field(init=False)
+    action_value_sum_squares: dict[Action, float] = field(init=False)
     visit_count: int = 0
 
     def __post_init__(self) -> None:
         self.regret_sum = {action: 0.0 for action in self.actions}
         self.strategy_sum = {action: 0.0 for action in self.actions}
+        self.action_value_count = {action: 0 for action in self.actions}
+        self.action_value_sum = {action: 0.0 for action in self.actions}
+        self.action_value_sum_squares = {action: 0.0 for action in self.actions}
+
+    def observe_action_value(self, action: Action, value: float) -> None:
+        self.action_value_count[action] += 1
+        self.action_value_sum[action] += value
+        self.action_value_sum_squares[action] += value * value
+
+    def action_value_stats(self, action: Action) -> dict[str, float | int | None]:
+        count = self.action_value_count[action]
+        if count == 0:
+            return {"samples": 0, "ev_mean": None, "ev_stddev": None, "ev_stderr": None, "ci95_low": None, "ci95_high": None}
+        mean = self.action_value_sum[action] / count
+        variance = max(0.0, self.action_value_sum_squares[action] / count - mean * mean)
+        stddev = sqrt(variance)
+        stderr = stddev / sqrt(count)
+        return {"samples": count, "ev_mean": mean, "ev_stddev": stddev, "ev_stderr": stderr, "ci95_low": mean - 1.96 * stderr, "ci95_high": mean + 1.96 * stderr}
 
     def current_strategy(self) -> dict[Action, float]:
         positive = {action: max(0.0, regret) for action, regret in self.regret_sum.items()}
@@ -219,6 +241,7 @@ class RiverMCCFRTrainer:
             }
             node_value = sum(strategy[action] * action_values[action] for action in actions)
             for action in actions:
+                node.observe_action_value(action, action_values[action])
                 node.regret_sum[action] += action_values[action] - node_value
             return node_value
 

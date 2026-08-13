@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from random import Random
 from time import perf_counter
-from typing import Mapping
+from typing import Callable, Mapping
 
 from poker_solver.engine.chance import remaining_cards
 from poker_solver.engine.multiway_postflop_policy import MultiwayPostflopSizingPolicy, abstract_multiway_postflop_actions
@@ -35,6 +35,7 @@ class MultiwayPostflopMCCFRTrainer:
         ranges: Mapping[Position, WeightedRange],
         sizing_policy: MultiwayPostflopSizingPolicy | None = None,
         seed: int = 0,
+        traverser_mode: str = "single_random",
     ) -> None:
         if set(ranges) != set(Position):
             raise ValueError("ranges must provide every 8-Max position")
@@ -43,6 +44,9 @@ class MultiwayPostflopMCCFRTrainer:
         self.initial_state = initial_state
         self.ranges = dict(ranges)
         self.sizing_policy = sizing_policy or MultiwayPostflopSizingPolicy()
+        if traverser_mode not in {"single_random", "all_players"}:
+            raise ValueError("traverser_mode must be single_random or all_players")
+        self.traverser_mode = traverser_mode
         self.rng = Random(seed)
         self.infosets: dict[tuple[object, ...], InfoSet] = {}
         self.iterations_completed = 0
@@ -53,7 +57,11 @@ class MultiwayPostflopMCCFRTrainer:
         started = perf_counter()
         for _ in range(iterations):
             holes = self._sample_deal()
-            for traverser in Position:
+            # External-sampling MCCFR: 非 traverser 依目前 regret 策略抽樣；
+            # 僅 traverser 的決策點完整展開並更新 regret。
+            # 舊 checkpoint 沒有此欄位時也採較穩定的 single_random 模式。
+            traversers = (self.rng.choice(tuple(Position)),) if getattr(self, "traverser_mode", "single_random") == "single_random" else Position
+            for traverser in traversers:
                 self._traverse(self.initial_state, holes, traverser, {position: 1.0 for position in Position})
             self.iterations_completed += 1
         elapsed = perf_counter() - started
@@ -66,19 +74,20 @@ class MultiwayPostflopMCCFRTrainer:
             raise KeyError("this information set has not been visited during training")
         return self.infosets[key].average_strategy()
 
-    def average_strategy_utility(self, state: MultiwayPostflopState, holes: dict[Position, tuple[str, str]]) -> dict[Position, int]:
+    def average_strategy_utility(self, state: MultiwayPostflopState, holes: dict[Position, tuple[str, str]], policy_lookup: Callable[[MultiwayPostflopState, Position, tuple[str, str]], dict[Action, float] | None] | None = None) -> dict[Position, int]:
         """以目前平均策略 rollout 一次，回傳所有位置的 continuation utility。"""
         if is_multiway_postflop_terminal(state):
             return settle_multiway_postflop(state, holes)[1]
         if state.betting_complete:
             card = self.rng.choice(remaining_cards((*state.board, *(card for combo in holes.values() for card in combo))))
-            return self.average_strategy_utility(advance_multiway_postflop_street(state, card), holes)
+            return self.average_strategy_utility(advance_multiway_postflop_street(state, card), holes, policy_lookup)
         assert state.current_player is not None
         actions = abstract_multiway_postflop_actions(state, self.sizing_policy)
         key = _infoset_key(state, state.current_player, holes[state.current_player])
-        strategy = self.infosets[key].average_strategy() if key in self.infosets else {action: 1.0 / len(actions) for action in actions}
+        strategy = policy_lookup(state, state.current_player, holes[state.current_player]) if policy_lookup else None
+        strategy = strategy or (self.infosets[key].average_strategy() if key in self.infosets else {action: 1.0 / len(actions) for action in actions})
         action = _sample_action(strategy, self.rng)
-        return self.average_strategy_utility(apply_multiway_postflop_action(state, action), holes)
+        return self.average_strategy_utility(apply_multiway_postflop_action(state, action), holes, policy_lookup)
 
     def _sample_deal(self) -> dict[Position, tuple[str, str]]:
         board = self.initial_state.board
@@ -123,6 +132,7 @@ class MultiwayPostflopMCCFRTrainer:
             }
             node_value = sum(strategy[action] * values[action] for action in actions)
             for action in actions:
+                node.observe_action_value(action, values[action])
                 node.regret_sum[action] += values[action] - node_value
             return node_value
         action = _sample_action(strategy, self.rng)

@@ -8,6 +8,8 @@ from itertools import product
 from pathlib import Path
 from typing import Any
 
+from tqdm import tqdm
+
 from poker_solver.engine.board_catalog import iter_canonical_boards
 
 
@@ -21,7 +23,7 @@ def main() -> None:
     manifest_path = _resolve(grid_path.parent, raw["manifest"])
     jobs = build_jobs(raw, output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    for job, config in jobs:
+    for job, config in tqdm(jobs, desc="寫入 pack", unit="pack", dynamic_ncols=True):
         (output_dir / Path(job["config"]).name).write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest = {"strategy_db": raw["strategy_db"], "jobs": [job for job, _ in jobs]}

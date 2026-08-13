@@ -94,13 +94,14 @@ class MultiwayPreflopMCCFRTrainer:
             }
             node_value = sum(strategy[action] * values[action] for action in actions)
             for action in actions:
+                node.observe_action_value(action, values[action])
                 node.regret_sum[action] += values[action] - node_value
             return node_value
 
         action = _sample_action(strategy, self.rng)
         return self._traverse(apply_action(state, action), holes, traverser, {**reach, actor: reach[actor] * strategy[action]})
 
-    def _terminal_utility(self, state: PreflopState, holes: dict[Position, tuple[str, str]]) -> dict[Position, int]:
+    def _terminal_utility(self, state: PreflopState, holes: dict[Position, tuple[str, str]]) -> dict[Position, float]:
         active = [player for player in state.players if not player.folded]
         if len(active) == 1:
             winner = active[0].position
@@ -109,7 +110,7 @@ class MultiwayPreflopMCCFRTrainer:
             utility = self.continuation_utility(state, holes)
             if set(utility) != set(Position):
                 raise ValueError("continuation utility must provide every 8-Max position")
-            return {position: int(round(utility[position])) for position in Position}
+            return {position: float(utility[position]) for position in Position}
         known = [card for cards in holes.values() for card in cards]
         board = remaining_cards(known)
         sampled_board = tuple(board[index] for index in self.rng.sample(range(len(board)), 5))

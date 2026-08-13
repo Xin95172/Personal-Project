@@ -15,17 +15,12 @@ python -m pip install -e ".[dev]"
 先從設定檔產生訓練包，再將 manifest 交給訓練器：
 
 ```powershell
-python -m poker_solver.generators.preflop configs\preflop_solution_grid.json
-python -m poker_solver.cli.build_strategy_db artifacts\generated\preflop_manifest.json
-
-python -m poker_solver.generators.heads_up configs\heads_up_solution_grid.json
-python -m poker_solver.cli.build_strategy_db artifacts\generated\heads_up_manifest.json
-
-python -m poker_solver.generators.multiway configs\multiway_solution_grid.json
-python -m poker_solver.cli.build_strategy_db artifacts\generated\multiway_manifest.json
+poker-train configs\preflop_solution_grid.json
+poker-train configs\heads_up_solution_grid.json
+poker-train configs\multiway_solution_grid.json
 ```
 
-這三組命令不帶任何 pack 上限，會依各 manifest 的順序逐包訓練。先只做小規模驗證時，請暫時在設定檔設定 `max_canonical_boards` 或 `max_preflop_routes_per_stack`，完成驗證後再改回 `null`。訓練會將 checkpoint、品質報告與策略寫到 `artifacts/`；此目錄是可再生輸出，不納入版控。
+每個命令都會自動產生 manifest，再依其順序逐包訓練。只想檢查會產生哪些 pack 時，加上 `--generate-only`。先只做小規模驗證時，請暫時在設定檔設定 `max_canonical_boards` 或 `max_preflop_routes_per_stack`，完成驗證後再改回 `null`。訓練會將 checkpoint、品質報告與策略寫到 `artifacts/`；此目錄是可再生輸出，不納入版控。
 
 啟動查詢 API：
 

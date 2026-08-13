@@ -42,6 +42,9 @@ def load_preflop_trainer(path: str | Path) -> MultiwayPreflopMCCFRTrainer:
                     raise_sizes=tuple(continuation.get("raise_sizes", (0.33, 0.5, 0.75, 1.0, 1.5, 2.0))),
                     include_all_in=bool(continuation.get("include_all_in", True)),
                     max_re_raises=continuation.get("max_re_raises", 1),
+                    strategy_db=str((Path(path).parent / continuation["strategy_db"]).resolve()) if continuation.get("strategy_db") else None,
+                    range_profile_id=str(continuation.get("range_profile_id", raw.get("range_spec", {}).get("kind", "all_combos"))),
+                    solver_version=str(continuation.get("solver_version", "multiway-postflop-grid-v1")),
                 ),
             )
         return trainer

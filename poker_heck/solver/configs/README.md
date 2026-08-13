@@ -35,6 +35,8 @@
 
 `percent` 必須介於 0 與 100；值越小，訓練的起手牌範圍越窄。Heads-up 設定以 `oop_range_spec` 與 `ip_range_spec` 分別設定兩位玩家。Multiway 設定的 `range_spec` 套用到所有存活玩家，直到未來加入位置別範圍為止。
 
+目前三份主要 grid 的預設值均為 `top_percent: 20`，用於先集中訓練較強、較常進入有意義底池的手牌。這是「縮小訓練遊戲」而非單純排程優先順序：範圍外的手牌不會得到策略。要恢復全範圍，改回 `{ "kind": "all_combos" }`，並同步將 preflop `continuation.range_profile_id` 改為 `all_combos`。
+
 ## Preflop：`preflop_solution_grid.json`
 
 `stack_bb`、`range_spec` 與 `sizing_policy` 控制抽象；產生器會遍歷有效座位與開局／3-bet／4-bet 等合法路線。`open_sizes_bb`、`raise_sizes_bb` 若出現在設定中，則是 preflop 專用的 BB 尺寸清單；postflop 的比例尺寸不會替代它們。
@@ -47,6 +49,9 @@
   "subgame_iterations": 100,
   "value_rollouts": 4,
   "max_cached_subgames": 500,
+  "strategy_db": "../artifacts/data/multiway_strategies.sqlite3",
+  "range_profile_id": "all_combos",
+  "solver_version": "multiway-postflop-grid-v1",
   "bet_sizes": [0.33, 0.5, 0.75, 1.0, 1.5, 2.0],
   "raise_sizes": [0.33, 0.5, 0.75, 1.0, 1.5, 2.0],
   "include_all_in": true,
@@ -76,6 +81,8 @@
 | `preflop_route_offset_per_stack` | 從每個 stack 的第幾條路線開始；用於分批。 |
 | `max_routes_per_stack` | 每個 stack 最多處理幾條路線；`null` 是全部。 |
 | `board_source` / `max_canonical_boards` | multiway 翻牌牌面來源與上限。 |
+
+目前預設是每個 stack 最多 20 條 preflop 路線與 50 個 canonical flop，作為可完成的第一批訓練。確認訓練、SQLite 與 API 正常後，再逐步提高；要完整遍歷時，將兩者改為 `null`。
 
 設定中的 `preflop_templates`、固定 ranges、固定 boards 都不應作為完整訓練的來源；產生器會根據上述規則遍歷。
 

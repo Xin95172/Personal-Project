@@ -20,9 +20,13 @@ def test_full_grid_generator_creates_every_selected_combination_in_priority_orde
     assert first_config["stack_bb"] == 40
     assert len(first_config["board"]) == 3
     assert first_config["completed_street_actions"] == []
-    assert first_config["range_spec"] == {"kind": "all_combos"}
+    assert first_config["range_spec"] == {"kind": "top_percent", "percent": 20}
     assert first_config["sizing_policy"]["max_re_raises"] == 1
-    assert len({job["range_profile_id"] for job, _ in jobs}) == 6
+    assert {job["range_profile_id"] for job, _ in jobs} == {"top_percent_20"}
+    assert {job["traverser_mode"] for job, _ in jobs} <= {"single_random", "all_players"}
+    assert all("traverser" in job["solver_version"] for job, _ in jobs)
+    assert len({json.dumps({"stack": config["stack_bb"], "actions": config["preflop_actions"], "board": config["board"]}, sort_keys=True) for _, config in jobs}) == 6
+    assert len({config["seed"] for _, config in jobs}) == 6
 
 
 def test_multiway_route_offset_selects_the_next_batch_without_repeating_routes():
@@ -31,9 +35,9 @@ def test_multiway_route_offset_selects_the_next_batch_without_repeating_routes()
     raw["max_canonical_boards"] = 1
     raw["max_preflop_routes_per_stack"] = 1
     raw["preflop_route_offset_per_stack"] = 0
-    first = build_jobs(raw, Path("generated/first"))[0][0]["range_profile_id"]
+    first = build_jobs(raw, Path("generated/first"))[0][1]["preflop_actions"]
     raw["preflop_route_offset_per_stack"] = 1
-    second = build_jobs(raw, Path("generated/second"))[0][0]["range_profile_id"]
+    second = build_jobs(raw, Path("generated/second"))[0][1]["preflop_actions"]
     assert first != second
 
 
@@ -72,5 +76,5 @@ def test_preflop_grid_generator_uses_one_rule_set_for_every_stack():
     first_job, first_config = jobs[0]
     assert first_job["game_type"] == "preflop_8max"
     assert first_config["stack_bb"] == 40
-    assert first_config["range_spec"] == {"kind": "all_combos"}
+    assert first_config["range_spec"] == {"kind": "top_percent", "percent": 20}
     assert first_config["sizing_policy"]["max_raises"] == 2

@@ -9,6 +9,7 @@ description = "8-Max No-Limit Texas Hold'em strategy solver"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi==0.115.12",
+  "tqdm==4.67.1",
   "uvicorn==0.34.2",
 ]
 
@@ -24,6 +25,7 @@ poker-train-river = "poker_solver.cli.train_river:main"
 poker-train-preflop = "poker_solver.cli.train_preflop:main"
 poker-train-multiway = "poker_solver.cli.train_multiway_postflop:main"
 poker-build-db = "poker_solver.cli.build_strategy_db:main"
+poker-train = "poker_solver.cli.train:main"
 poker-generate-packs = "poker_solver.generators.multiway:main"
 poker-generate-heads-up-packs = "poker_solver.generators.heads_up:main"
 poker-generate-preflop-packs = "poker_solver.generators.preflop:main"

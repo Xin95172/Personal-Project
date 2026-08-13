@@ -172,3 +172,16 @@ def test_all_in_players_automatically_run_out_remaining_streets():
     assert turn.betting_complete
     river = advance_multiway_postflop_street(turn, "3c")
     assert is_multiway_postflop_terminal(river)
+
+
+def test_last_eligible_player_all_in_raise_finishes_the_street():
+    preflop = create_8max_preflop(stacks_bb={Position.SB: 16, Position.BB: 20})
+    for _ in range(6):
+        preflop = apply_action(preflop, Action(ActionType.FOLD))
+    preflop = apply_action(preflop, Action(ActionType.CALL))
+    preflop = apply_action(preflop, Action(ActionType.CHECK))
+    flop = advance_preflop_to_flop(preflop, ("As", "Kd", "Qh"))
+    flop = apply_multiway_postflop_action(flop, Action(ActionType.ALL_IN))
+    flop = apply_multiway_postflop_action(flop, Action(ActionType.ALL_IN))
+    assert flop.current_player is None
+    assert flop.betting_complete

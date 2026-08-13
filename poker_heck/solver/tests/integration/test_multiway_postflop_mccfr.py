@@ -5,6 +5,7 @@ from poker_solver.solver_core.checkpoint import load_checkpoint, save_checkpoint
 from poker_solver.solver_core.multiway_postflop_config import load_multiway_postflop_trainer
 from poker_solver.solver_core.multiway_postflop_mccfr import MultiwayPostflopMCCFRTrainer
 from poker_solver.solver_core.river_mccfr import WeightedRange
+import pytest
 
 
 def test_multiway_postflop_trainer_smoke_runs_from_flop_to_showdown():
@@ -43,6 +44,26 @@ def test_multiway_postflop_checkpoint_round_trip(tmp_path):
     resumed = load_checkpoint(path)
     assert isinstance(resumed, MultiwayPostflopMCCFRTrainer)
     assert resumed.iterations_completed == 1
+
+
+@pytest.mark.parametrize(("mode", "expected_traversals"), [("single_random", 1), ("all_players", 8)])
+def test_multiway_traverser_mode_controls_regret_update_traversals(monkeypatch, mode, expected_traversals):
+    preflop = create_8max_preflop()
+    for _ in range(6):
+        preflop = apply_action(preflop, Action(ActionType.FOLD))
+    preflop = apply_action(preflop, Action(ActionType.CALL))
+    preflop = apply_action(preflop, Action(ActionType.CHECK))
+    combos = (("2c", "2d"), ("3c", "3d"), ("4c", "4d"), ("5c", "5d"), ("6c", "6d"), ("7c", "7d"), ("8c", "8d"), ("9c", "9d"))
+    trainer = MultiwayPostflopMCCFRTrainer(
+        initial_state=advance_preflop_to_flop(preflop, ("As", "Kd", "Qh")),
+        ranges={position: WeightedRange.from_cards((combos[index],)) for index, position in enumerate(Position)},
+        sizing_policy=MultiwayPostflopSizingPolicy(bet_sizes=(0.5,), raise_sizes=(), include_all_in=False, max_re_raises=0),
+        traverser_mode=mode,
+    )
+    calls = []
+    monkeypatch.setattr(trainer, "_traverse", lambda _state, _holes, traverser, _reach: calls.append(traverser) or 0.0)
+    trainer.train(1)
+    assert len(calls) == expected_traversals
 
 
 def test_multiway_postflop_json_config_builds_trainer(tmp_path):

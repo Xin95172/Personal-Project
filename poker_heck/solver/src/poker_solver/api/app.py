@@ -29,6 +29,12 @@ class RiverStrategyRequest(BaseModel):
 class StrategyActionResponse(BaseModel):
     action: str
     probability: float
+    samples: int | None = None
+    ev_mean: float | None = None
+    ev_stddev: float | None = None
+    ev_stderr: float | None = None
+    ci95_low: float | None = None
+    ci95_high: float | None = None
 
 
 class RiverStrategyResponse(BaseModel):
@@ -184,7 +190,7 @@ def create_app(
             board=stored.board,
             hero_cards=stored.hero_cards,
             pot=format_bb(stored.pot_units),
-            actions=[StrategyActionResponse(action=action.display, probability=action.probability) for action in stored.actions],
+            actions=[StrategyActionResponse(action=action.display, probability=action.probability, samples=action.samples, ev_mean=action.ev_mean, ev_stddev=action.ev_stddev, ev_stderr=action.ev_stderr, ci95_low=action.ci95_low, ci95_high=action.ci95_high) for action in stored.actions],
             trained_iterations=stored.trained_iterations,
             quality=stored.quality,
         )
@@ -213,7 +219,7 @@ def create_app(
             strategy_key=stored.strategy_key,
             game_type=stored.context.game_type,
             street=stored.context.street,
-            actions=[StrategyActionResponse(action=action.display, probability=action.probability) for action in stored.actions],
+            actions=[StrategyActionResponse(action=action.display, probability=action.probability, samples=action.samples, ev_mean=action.ev_mean, ev_stddev=action.ev_stddev, ev_stderr=action.ev_stderr, ci95_low=action.ci95_low, ci95_high=action.ci95_high) for action in stored.actions],
             trained_iterations=stored.trained_iterations,
             quality=stored.quality,
         )

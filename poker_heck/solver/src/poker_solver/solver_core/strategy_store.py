@@ -33,6 +33,17 @@ class StoredAction:
     amount_units: int | None
     display: str
     probability: float
+    samples: int | None = None
+    ev_mean: float | None = None
+    ev_stddev: float | None = None
+    ev_stderr: float | None = None
+    ci95_low: float | None = None
+    ci95_high: float | None = None
+
+
+def stored_action_with_stats(action: Action, display: str, probability: float, node: Any) -> StoredAction:
+    stats = node.action_value_stats(action)
+    return StoredAction(action.kind.value, action.amount, display, probability, **stats)
 
 
 @dataclass(frozen=True)
@@ -121,12 +132,18 @@ class StrategyStore:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._batch_connection: sqlite3.Connection | None = None
+        self._pending_strategies: list[StoredStrategy] | None = None
+        self._pending_batch_size = 0
+        self._pending_progress: Any | None = None
         self._create_schema()
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.path)
+        connection = sqlite3.connect(self.path, timeout=30)
         connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA synchronous=NORMAL")
         try:
             yield connection
             connection.commit()
@@ -177,21 +194,95 @@ class StrategyStore:
                 """CREATE INDEX IF NOT EXISTS river_lookup_index ON river_strategies
                 (range_profile_id, solver_version, hero_position)"""
             )
-
-    def upsert(self, strategy: StoredStrategy) -> None:
-        with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO strategies (
-                    strategy_key, game_type, street, player_count, hero_position,
-                    context_json, trained_iterations, actions_json, quality_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(strategy_key) DO UPDATE SET
-                    trained_iterations=excluded.trained_iterations,
-                    actions_json=excluded.actions_json,
-                    quality_json=excluded.quality_json,
-                    created_at=CURRENT_TIMESTAMP
-                """,
+                CREATE TABLE IF NOT EXISTS completed_pack_exports (
+                    export_key TEXT PRIMARY KEY,
+                    trained_iterations INTEGER NOT NULL,
+                    infoset_count INTEGER NOT NULL,
+                    completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+
+    @contextmanager
+    def batch(self) -> Iterator[None]:
+        """在單一 SQLite 交易中寫入大量策略，避免每個 infoset 各 commit 一次。"""
+        if self._batch_connection is not None:
+            yield
+            return
+        with self._connect() as connection:
+            self._batch_connection = connection
+            try:
+                yield
+            finally:
+                self._batch_connection = None
+
+    def upsert(self, strategy: StoredStrategy) -> None:
+        if self._pending_strategies is not None:
+            self._pending_strategies.append(strategy)
+            if len(self._pending_strategies) >= self._pending_batch_size:
+                self._flush_pending_strategies()
+            return
+        if self._batch_connection is not None:
+            self._upsert(self._batch_connection, strategy)
+            return
+        with self._connect() as connection:
+            self._upsert(connection, strategy)
+
+    @contextmanager
+    def buffered_upserts(self, *, batch_size: int = 500, progress: Any | None = None) -> Iterator[None]:
+        """累積策略後以 executemany 寫入，降低大量 infoset 的 SQLite 呼叫成本。"""
+        if batch_size <= 0:
+            raise ValueError("batch_size 必須是正整數")
+        if self._pending_strategies is not None:
+            yield
+            return
+        self._pending_strategies = []
+        self._pending_batch_size = batch_size
+        self._pending_progress = progress
+        try:
+            yield
+        except BaseException:
+            self._pending_strategies.clear()
+            raise
+        else:
+            self._flush_pending_strategies()
+        finally:
+            self._pending_strategies = None
+            self._pending_batch_size = 0
+            self._pending_progress = None
+
+    def _flush_pending_strategies(self) -> None:
+        strategies = self._pending_strategies
+        if not strategies:
+            return
+        if self._batch_connection is not None:
+            self._upsert_many(self._batch_connection, strategies)
+        else:
+            with self._connect() as connection:
+                self._upsert_many(connection, strategies)
+        if self._pending_progress is not None:
+            self._pending_progress.update(len(strategies))
+        strategies.clear()
+
+    def _upsert(self, connection: sqlite3.Connection, strategy: StoredStrategy) -> None:
+        self._upsert_many(connection, (strategy,))
+
+    def _upsert_many(self, connection: sqlite3.Connection, strategies: tuple[StoredStrategy, ...] | list[StoredStrategy]) -> None:
+        connection.executemany(
+            """
+            INSERT INTO strategies (
+                strategy_key, game_type, street, player_count, hero_position,
+                context_json, trained_iterations, actions_json, quality_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(strategy_key) DO UPDATE SET
+                trained_iterations=excluded.trained_iterations,
+                actions_json=excluded.actions_json,
+                quality_json=excluded.quality_json,
+                created_at=CURRENT_TIMESTAMP
+            """,
+            (
                 (
                     strategy.strategy_key,
                     strategy.context.game_type,
@@ -202,7 +293,31 @@ class StrategyStore:
                     strategy.trained_iterations,
                     json.dumps([asdict(action) for action in strategy.actions]),
                     json.dumps(strategy.quality) if strategy.quality is not None else None,
-                ),
+                )
+                for strategy in strategies
+            ),
+        )
+
+    def is_pack_export_complete(self, export_key: str, *, trained_iterations: int, infoset_count: int) -> bool:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM completed_pack_exports WHERE export_key = ? AND trained_iterations = ? AND infoset_count = ?",
+                (export_key, trained_iterations, infoset_count),
+            ).fetchone()
+        return row is not None
+
+    def mark_pack_export_complete(self, export_key: str, *, trained_iterations: int, infoset_count: int) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO completed_pack_exports (export_key, trained_iterations, infoset_count)
+                VALUES (?, ?, ?)
+                ON CONFLICT(export_key) DO UPDATE SET
+                    trained_iterations=excluded.trained_iterations,
+                    infoset_count=excluded.infoset_count,
+                    completed_at=CURRENT_TIMESTAMP
+                """,
+                (export_key, trained_iterations, infoset_count),
             )
 
     def lookup(self, context: StrategyContext) -> StoredStrategy | None:
@@ -406,7 +521,7 @@ def export_river_tree(
         )
         record = StoredStrategy(
             strategy_key=strategy_key(context), context=context, trained_iterations=trainer.iterations_completed,
-            actions=tuple(StoredAction(action.kind.value, action.amount, _format_river_action(action, int(pot)), probability) for action, probability in node.average_strategy().items()),
+            actions=tuple(stored_action_with_stats(action, _format_river_action(action, int(pot)), probability, node) for action, probability in node.average_strategy().items()),
             quality=asdict(quality) if quality is not None else None,
         )
         store.upsert(record)
@@ -433,7 +548,7 @@ def export_preflop_infosets(
         record = StoredStrategy(
             strategy_key=strategy_key(context), context=context, trained_iterations=trainer.iterations_completed,
             actions=tuple(
-                StoredAction(action.kind.value, action.amount, _format_preflop_action(action), probability)
+                stored_action_with_stats(action, _format_preflop_action(action), probability, node)
                 for action, probability in node.average_strategy().items()
             ),
             quality=None,
@@ -465,10 +580,48 @@ def export_multiway_postflop_infosets(
         record = StoredStrategy(
             strategy_key=strategy_key(context), context=context, trained_iterations=trainer.iterations_completed,
             actions=tuple(
-                StoredAction(action.kind.value, action.amount, _format_multiway_action(action, int(pot), int(current_bet), int(to_call)), probability)
+                stored_action_with_stats(action, _format_multiway_action(action, int(pot), int(current_bet), int(to_call)), probability, node)
                 for action, probability in node.average_strategy().items()
             ),
             quality=None,
+        )
+        store.upsert(record)
+        stored += 1
+    return ExportReport(stored, stored, 0)
+
+
+def export_multiway_postflop_root_infosets(
+    store: StrategyStore,
+    trainer: MultiwayPostflopMCCFRTrainer,
+    *,
+    range_profile_id: str = "default",
+    solver_version: str = "multiway-postflop-v1",
+) -> ExportReport:
+    """只保存起始決策點；完整子樹保留在 checkpoint 供後續 re-solve。"""
+    state = trainer.initial_state
+    actor = state.current_player
+    if actor is None:
+        return ExportReport(0, 0, 0)
+    stored = 0
+    default_stack = max(player.stack for player in state.players)
+    for key, node in trainer.infosets.items():
+        position, hole_cards, street, board, pot, current_bet, _raise_size, seats, history = key
+        if position != actor.value or tuple(board) != state.board or tuple(history) != ():
+            continue
+        committed = next(seat[1] for seat in seats if seat[0] == position)
+        to_call = current_bet - committed
+        context = StrategyContext(
+            game_type="multiway_postflop", street=str(street), player_count=sum(not seat[2] for seat in seats), hero_position=str(position),
+            hero_cards=tuple(sorted(hole_cards)), board=tuple(board), pot_units=int(pot), effective_stack_units=default_stack,
+            action_history=(), range_profile_id=range_profile_id, solver_version=solver_version,
+        )
+        record = StoredStrategy(
+            strategy_key=strategy_key(context), context=context, trained_iterations=trainer.iterations_completed,
+            actions=tuple(
+                stored_action_with_stats(action, _format_multiway_action(action, int(pot), int(current_bet), int(to_call)), probability, node)
+                for action, probability in node.average_strategy().items()
+            ),
+            quality={"storage_scope": "root_only", "total_trained_infosets": len(trainer.infosets)},
         )
         store.upsert(record)
         stored += 1
@@ -500,7 +653,7 @@ def export_heads_up_postflop_infosets(
         record = StoredStrategy(
             strategy_key=strategy_key(context), context=context, trained_iterations=trainer.iterations_completed,
             actions=tuple(
-                StoredAction(action.kind.value, action.amount, _format_heads_up_postflop_action(action, int(pot)), probability)
+                stored_action_with_stats(action, _format_heads_up_postflop_action(action, int(pot)), probability, node)
                 for action, probability in node.average_strategy().items()
             ), quality=None,
         )

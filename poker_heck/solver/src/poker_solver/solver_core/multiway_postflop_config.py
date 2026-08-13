@@ -52,6 +52,7 @@ def load_multiway_postflop_trainer(path: str | Path) -> MultiwayPostflopMCCFRTra
                 max_re_raises=policy.get("max_re_raises", 2),
             ),
             seed=int(raw.get("seed", 0)),
+            traverser_mode=str(raw.get("traverser_mode", "single_random")),
         )
     except (KeyError, TypeError, ValueError) as error:
         raise ValueError(f"invalid multiway postflop solve configuration: {error}") from error

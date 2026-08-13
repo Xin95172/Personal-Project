@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from tqdm import tqdm
+
 
 def main() -> None:
     parser = ArgumentParser(description="產生 multiway conditional subgame pack")
@@ -16,7 +18,7 @@ def main() -> None:
     manifest = _resolve(path.parent, raw["manifest"])
     jobs = build_jobs(raw, output)
     output.mkdir(parents=True, exist_ok=True)
-    for job, config in jobs:
+    for job, config in tqdm(jobs, desc="寫入 pack", unit="pack", dynamic_ncols=True):
         (output / Path(job["config"]).name).write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     manifest.parent.mkdir(parents=True, exist_ok=True)
     manifest.write_text(json.dumps({"strategy_db": raw["strategy_db"], "jobs": [job for job, _ in jobs]}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

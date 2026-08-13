@@ -218,6 +218,19 @@ def apply_multiway_postflop_action(state: MultiwayPostflopState, action: Action)
     raise_size = target - state.current_bet
     full_raise = raise_size >= state.last_full_raise_size
     active = _actable_multiway_postflop_positions(result) - {actor_id}
+    if not active:
+        # 最後一位可行動玩家以加注型全下投入後，其他未棄牌玩家皆已全下；
+        # 此街應結束並交由 chance node 發下一張牌，而不是留下無 current_player 的非完成狀態。
+        return replace(
+            result,
+            current_bet=target,
+            last_full_raise_size=raise_size if full_raise else state.last_full_raise_size,
+            current_player=None,
+            pending_players=frozenset(),
+            raise_allowed_players=frozenset(),
+            betting_complete=True,
+            action_history=history,
+        )
     eligible = frozenset(active) if full_raise else state.raise_allowed_players & frozenset(active)
     return replace(
         result,
