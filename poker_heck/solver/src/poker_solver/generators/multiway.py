@@ -68,10 +68,13 @@ def _routes(stack: int, policy: PreflopSizingPolicy, counts: set[int], offset: i
     def walk(state):
         nonlocal matched
         if is_terminal(state):
-            if not state.hand_ended and sum(not player.folded for player in state.players) in counts:
+            active_players = [player for player in state.players if not player.folded]
+            # 所有人都已全下時，後面只剩發牌與攤牌，沒有 postflop 決策可訓練。
+            has_postflop_decision = any(not player.all_in for player in active_players)
+            if not state.hand_ended and has_postflop_decision and len(active_players) in counts:
                 matched += 1
                 if matched > offset:
-                    active = sum(not player.folded for player in state.players)
+                    active = len(active_players)
                     result.append((f"p{active}_{matched:06d}", active, [_action(action) for action in state.action_history]))
                     if limit is not None and len(result) >= limit:
                         raise _RouteLimitReached

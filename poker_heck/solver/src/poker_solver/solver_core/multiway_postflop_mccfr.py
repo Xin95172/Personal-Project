@@ -151,6 +151,21 @@ def _infoset_key(state: MultiwayPostflopState, player: Position, hole_cards: tup
         state.pot,
         state.current_bet,
         state.last_full_raise_size,
-        tuple((seat.position.value, seat.committed_this_street, seat.folded, seat.all_in) for seat in state.players),
+        # 所有會影響合法動作集合的公開狀態都必須是 infoset key 的一部分。
+        # 少了 stack / committed_total / 可再加注資格時，兩個表面相似、
+        # 實際下注選項不同的局面會共用同一個 InfoSet。
+        tuple(
+            (
+                seat.position.value,
+                seat.stack,
+                seat.committed_this_street,
+                seat.committed_total,
+                seat.folded,
+                seat.all_in,
+            )
+            for seat in state.players
+        ),
+        tuple(sorted(position.value for position in state.pending_players)),
+        tuple(sorted(position.value for position in state.raise_allowed_players)),
         tuple((action.kind.value, action.amount) for action in state.action_history),
     )

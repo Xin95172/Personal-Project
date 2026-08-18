@@ -149,6 +149,7 @@ def advance_preflop_to_flop(state: PreflopState, board: tuple[str, str, str]) ->
         current_player=first,
         pending_players=pending,
         raise_allowed_players=pending,
+        betting_complete=not pending,
     )
 
 

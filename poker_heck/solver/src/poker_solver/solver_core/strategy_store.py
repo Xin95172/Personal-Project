@@ -569,11 +569,11 @@ def export_multiway_postflop_infosets(
     stored = 0
     default_stack = max(player.stack for player in trainer.initial_state.players)
     for key, node in trainer.infosets.items():
-        position, hole_cards, street, board, pot, current_bet, _raise_size, seats, history = key
-        committed = next(seat[1] for seat in seats if seat[0] == position)
+        position, hole_cards, street, board, pot, current_bet, _raise_size, seats, _pending, _raise_allowed, history = key
+        committed = next(seat[2] for seat in seats if seat[0] == position)
         to_call = current_bet - committed
         context = StrategyContext(
-            game_type="multiway_postflop", street=str(street), player_count=sum(not seat[2] for seat in seats), hero_position=str(position),
+            game_type="multiway_postflop", street=str(street), player_count=sum(not seat[4] for seat in seats), hero_position=str(position),
             hero_cards=tuple(sorted(hole_cards)), board=tuple(board), pot_units=int(pot), effective_stack_units=default_stack,
             action_history=tuple(history), range_profile_id=range_profile_id, solver_version=solver_version,
         )
@@ -605,13 +605,13 @@ def export_multiway_postflop_root_infosets(
     stored = 0
     default_stack = max(player.stack for player in state.players)
     for key, node in trainer.infosets.items():
-        position, hole_cards, street, board, pot, current_bet, _raise_size, seats, history = key
+        position, hole_cards, street, board, pot, current_bet, _raise_size, seats, _pending, _raise_allowed, history = key
         if position != actor.value or tuple(board) != state.board or tuple(history) != ():
             continue
-        committed = next(seat[1] for seat in seats if seat[0] == position)
+        committed = next(seat[2] for seat in seats if seat[0] == position)
         to_call = current_bet - committed
         context = StrategyContext(
-            game_type="multiway_postflop", street=str(street), player_count=sum(not seat[2] for seat in seats), hero_position=str(position),
+            game_type="multiway_postflop", street=str(street), player_count=sum(not seat[4] for seat in seats), hero_position=str(position),
             hero_cards=tuple(sorted(hole_cards)), board=tuple(board), pot_units=int(pot), effective_stack_units=default_stack,
             action_history=(), range_profile_id=range_profile_id, solver_version=solver_version,
         )

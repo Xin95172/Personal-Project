@@ -11,6 +11,7 @@ from tqdm import tqdm
 from poker_solver.solver_core.checkpoint import load_checkpoint, save_checkpoint
 from poker_solver.solver_core.config import load_config
 from poker_solver.solver_core.multiway_postflop_config import load_multiway_postflop_trainer
+from poker_solver.solver_core.multiway_postflop_mccfr import MultiwayPostflopMCCFRTrainer
 from poker_solver.solver_core.preflop_config import load_preflop_trainer
 from poker_solver.solver_core.river_analysis import analyze_river_profile
 from poker_solver.solver_core.river_mccfr import RiverMCCFRTrainer
@@ -45,7 +46,12 @@ def _run_job(store: StrategyStore, base: Path, job: dict, index: int, total: int
     game_type = job["game_type"]
     config_path = _resolve(base, job["config"])
     checkpoint = _resolve(base, job["checkpoint"])
-    trainer = load_checkpoint(checkpoint) if checkpoint.exists() else _new_trainer(game_type, config_path)
+    expected_trainer = _new_trainer(game_type, config_path)
+    if checkpoint.exists():
+        loaded_trainer = load_checkpoint(checkpoint)
+        trainer = loaded_trainer if _checkpoint_matches_config(loaded_trainer, expected_trainer) else expected_trainer
+    else:
+        trainer = expected_trainer
     _train(trainer, int(job["iterations"]), checkpoint, int(job["checkpoint_every"]), description=f"{index}/{total} {config_path.name}")
     if not job["export_all_routes"]:
         return
@@ -84,6 +90,25 @@ def _new_trainer(game_type: str, config_path: Path):
     if type(trainer) is not expected:
         raise ValueError(f"{game_type} 的 trainer 類型不符")
     return trainer
+
+
+def _checkpoint_matches_config(trainer, expected) -> bool:
+    """只在 checkpoint 與目前 pack 完全相容時才接續訓練。
+
+    pack 產生規則更新後，舊的檔名序號可能指向不同局面；若仍直接讀取
+    同名 checkpoint，會把舊策略錯套到新局面。這裡保留相容的 checkpoint，
+    但安全地略過不相容者。
+    """
+    if type(trainer) is not type(expected):
+        return False
+    for attribute in ("initial_state", "ranges", "sizing_policy", "traverser_mode", "stack_bb"):
+        if hasattr(expected, attribute) and getattr(trainer, attribute, object()) != getattr(expected, attribute):
+            return False
+    # multiway infoset v2 新增了剩餘籌碼、總投入與加注資格；含有舊 key
+    # 的 checkpoint 不能與新版節點混用，必須從該 pack 的初始局面重建。
+    if isinstance(expected, MultiwayPostflopMCCFRTrainer):
+        return all(len(key) == 11 for key in trainer.infosets)
+    return True
 
 
 def _train(trainer, iterations: int, checkpoint: Path, checkpoint_every: int, *, description: str) -> None:

@@ -251,6 +251,6 @@ def test_multiway_export_uses_remaining_players_not_all_eight_seats(tmp_path):
     store = StrategyStore(tmp_path / "strategies.sqlite3")
     export_multiway_postflop_infosets(store, trainer, range_profile_id="active-count")
     key = next(iter(trainer.infosets))
-    position, hole_cards, street, board, pot, _bet, _raise, _seats, history = key
+    position, hole_cards, street, board, pot, _bet, _raise, _seats, _pending, _raise_allowed, history = key
     found = store.lookup(StrategyContext("multiway_postflop", street, 2, position, tuple(sorted(hole_cards)), tuple(board), pot, max(player.stack for player in trainer.initial_state.players), tuple(history), "active-count", "multiway-postflop-v1"))
     assert found is not None

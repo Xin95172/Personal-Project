@@ -18,6 +18,6 @@
   "all_players_max_active_players": 3,
   "checkpoint_every": 100,
   "seed_start": 1,
-  "solver_version": "multiway-postflop-grid-v1",
+  "solver_version": "multiway-postflop-grid-v2",
   "job_options": {"export_all_routes": true, "quality_report": false}
 }
