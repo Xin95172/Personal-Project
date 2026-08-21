@@ -56,7 +56,7 @@ def build_jobs(raw: dict[str, Any], output: Path) -> list[tuple[dict[str, Any], 
         resolved_mode = _resolve_traverser_mode(raw, requested_mode, player_count)
         config = {"solve_scope": "flop_full_tree", "stack_bb": stack, "board": list(board), "completed_street_actions": [], "preflop_actions": actions, "range_spec": raw["range_spec"], "sizing_policy": raw["sizing_policy"], "traverser_mode": resolved_mode, "requested_traverser_mode": requested_mode, "postflop_player_count": player_count, "seed": seed}
         options = raw["job_options"]
-        jobs.append(({"game_type": "multiway_postflop", "config": f"{output.name}/{stem}.json", "range_profile_id": profile, "solver_version": f"{raw['solver_version']}-{_mode_label(resolved_mode)}", "iterations": int(raw["iterations_per_pack"]), "checkpoint": f"{raw['checkpoint_dir']}/{stem}.pkl", "checkpoint_every": int(raw["checkpoint_every"]), "export_all_routes": bool(options["export_all_routes"]), "quality_report": bool(options["quality_report"]), "traverser_mode": resolved_mode}, config))
+        jobs.append(({"game_type": "multiway_postflop", "config": f"{output.name}/{stem}.json", "range_profile_id": profile, "solver_version": f"{raw['solver_version']}-{_mode_label(resolved_mode)}", "iterations": int(raw["iterations_per_pack"]), "checkpoint": f"{raw['checkpoint_dir']}/{stem}.pkl", "checkpoint_every": int(raw["checkpoint_every"]), "export_all_routes": bool(options["export_all_routes"]), "quality_report": bool(options["quality_report"]), "cleanup_checkpoint_after_export": bool(options.get("cleanup_checkpoint_after_export", False)), "traverser_mode": resolved_mode}, config))
     return jobs
 
 

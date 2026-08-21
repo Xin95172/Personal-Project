@@ -306,6 +306,15 @@ class StrategyStore:
             ).fetchone()
         return row is not None
 
+    def has_completed_pack_export(self, export_key: str) -> bool:
+        """回傳指定 pack 是否已完整匯出，供重啟訓練時直接略過。"""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM completed_pack_exports WHERE export_key = ?",
+                (export_key,),
+            ).fetchone()
+        return row is not None
+
     def mark_pack_export_complete(self, export_key: str, *, trained_iterations: int, infoset_count: int) -> None:
         with self._connect() as connection:
             connection.execute(

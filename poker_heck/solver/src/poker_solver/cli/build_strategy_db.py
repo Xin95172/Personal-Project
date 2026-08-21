@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 from hashlib import sha256
 import json
 from pathlib import Path
+from pickle import UnpicklingError
 
 from tqdm import tqdm
 
@@ -38,7 +39,7 @@ def run_manifest(path: Path) -> None:
             mode = job.get("traverser_mode")
             mode_label = "單 traverser" if mode == "single_random" else "全玩家" if mode == "all_players" else ""
             packs.set_postfix_str(f"訓練：{Path(job['config']).name} {mode_label}", refresh=False)
-            _run_job(store, manifest_path.parent, job, index, len(jobs), progress=packs)
+            _run_job(store, manifest_path.parent, job, index, len(jobs), progress=None)
     print(f"策略資料庫已建立：{store.path}")
 
 
@@ -46,20 +47,35 @@ def _run_job(store: StrategyStore, base: Path, job: dict, index: int, total: int
     game_type = job["game_type"]
     config_path = _resolve(base, job["config"])
     checkpoint = _resolve(base, job["checkpoint"])
+    profile = job.get("range_profile_id", "default")
+    version = job.get("solver_version", f"{game_type}-v1")
+    export_key = _pack_export_key(config_path, game_type, profile, version)
+    if job["export_all_routes"] and store.has_completed_pack_export(export_key):
+        if job.get("cleanup_checkpoint_after_export", False):
+            checkpoint.unlink(missing_ok=True)
+        if progress is not None:
+            progress.set_postfix_str(f"撌脰歲??綽?{config_path.name}", refresh=True)
+        return
     expected_trainer = _new_trainer(game_type, config_path)
     if checkpoint.exists():
-        loaded_trainer = load_checkpoint(checkpoint)
-        trainer = loaded_trainer if _checkpoint_matches_config(loaded_trainer, expected_trainer) else expected_trainer
+        try:
+            loaded_trainer = load_checkpoint(checkpoint)
+        except (EOFError, UnpicklingError, OSError, ValueError, AttributeError, ImportError):
+            # 寫檔中斷可能留下不完整 pickle；它無法安全恢復，改由本 pack
+            # 的初始局面重新訓練，並移除壞檔以免下次再次停止。
+            checkpoint.unlink(missing_ok=True)
+            trainer = expected_trainer
+        else:
+            trainer = loaded_trainer if _checkpoint_matches_config(loaded_trainer, expected_trainer) else expected_trainer
     else:
         trainer = expected_trainer
     _train(trainer, int(job["iterations"]), checkpoint, int(job["checkpoint_every"]), description=f"{index}/{total} {config_path.name}")
     if not job["export_all_routes"]:
         return
-    profile = job.get("range_profile_id", "default")
-    version = job.get("solver_version", f"{game_type}-v1")
     infoset_count = _export_count(game_type, trainer)
-    export_key = _pack_export_key(config_path, game_type, profile, version)
     if store.is_pack_export_complete(export_key, trained_iterations=trainer.iterations_completed, infoset_count=infoset_count):
+        if job.get("cleanup_checkpoint_after_export", False):
+            checkpoint.unlink(missing_ok=True)
         if progress is not None:
             progress.set_postfix_str(f"已跳過匯出：{config_path.name}", refresh=True)
         return
@@ -78,6 +94,8 @@ def _run_job(store: StrategyStore, base: Path, job: dict, index: int, total: int
             else:
                 raise ValueError(f"不支援的 game_type：{game_type}")
     store.mark_pack_export_complete(export_key, trained_iterations=trainer.iterations_completed, infoset_count=infoset_count)
+    if job.get("cleanup_checkpoint_after_export", False):
+        checkpoint.unlink(missing_ok=True)
 
 
 def _new_trainer(game_type: str, config_path: Path):

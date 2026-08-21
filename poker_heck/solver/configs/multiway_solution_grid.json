@@ -2,7 +2,7 @@
   "strategy_db": "../artifacts/data/multiway_root_strategies.sqlite3",
   "output_dir": "../artifacts/generated/multiway_packs",
   "manifest": "../artifacts/generated/multiway_manifest.json",
-  "checkpoint_dir": "../artifacts/checkpoints",
+  "checkpoint_dir": "../checkpoints",
   "stack_bb": [40, 60, 100],
   "player_counts": [2, 3, 4, 5, 6, 7, 8],
   "solve_scope": "flop_full_tree",
@@ -19,5 +19,5 @@
   "checkpoint_every": 100,
   "seed_start": 1,
   "solver_version": "multiway-postflop-grid-v2",
-  "job_options": {"export_all_routes": true, "quality_report": false}
+  "job_options": {"export_all_routes": true, "quality_report": false, "cleanup_checkpoint_after_export": true}
 }
