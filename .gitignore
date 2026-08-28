@@ -19,3 +19,15 @@
 ~$*.xlsx
 .DS_Store
 ndhu/portfolio_management/國宏/main.ipynb
+
+# Secrets moved to C:/Users/user/Documents/GitHub/Data
+/data/api_key.json
+/data/account.json
+/textual data analysis/notebooks/main.ipynb
+.env
+.env.*
+*.pem
+*.pfx
+*.p12
+*.jks
+*.keystore
