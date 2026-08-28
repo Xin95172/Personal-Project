@@ -3,6 +3,8 @@ import { ArrowRight, CheckCircle2 } from "lucide-react";
 import SiteHeader from "@/components/site-header";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 export default async function ServicesPage() {
   const supabase = await createClient();
   const { data: services } = await supabase.from("site_content").select("id, title, body").eq("page_slug", "services").eq("status", "published").order("sort_order");

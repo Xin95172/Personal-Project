@@ -3,6 +3,8 @@ import SiteHeader from "@/components/site-header";
 import QuestionSubmissionForm from "@/components/question-submission-form";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 export default async function QaPage() {
   const supabase = await createClient();
   const { data: questions } = await supabase.from("question_submissions").select("id, question, answer, answered_at").eq("status", "answered").not("answer", "is", null).order("answered_at", { ascending: false }).limit(20);

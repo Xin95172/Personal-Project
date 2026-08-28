@@ -3,6 +3,8 @@ import { ArrowRight } from "lucide-react";
 import SiteHeader from "@/components/site-header";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewsPage() {
   const supabase = await createClient();
   const { data: articles } = await supabase.from("articles").select("id, title, excerpt, content, author_name, created_at").eq("status", "published").order("created_at", { ascending: false });
