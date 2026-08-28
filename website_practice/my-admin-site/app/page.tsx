@@ -4,6 +4,7 @@ import SiteHeader from "@/components/site-header";
 import TrademarkSearch from "@/components/trademark-search";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { withTimeout } from "@/lib/with-timeout";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +17,13 @@ export default async function HomePage() {
   if (configured) {
     try {
       const supabase = await createClient();
-      const response = await supabase
+      const response = await withTimeout(supabase
         .from("site_content")
         .select("title, body, cta_label, cta_href")
         .eq("page_slug", "home")
         .eq("section_key", "hero")
         .eq("status", "published")
-        .maybeSingle();
+        .maybeSingle());
 
       data = response.data;
     } catch (error) {

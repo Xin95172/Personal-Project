@@ -2,11 +2,21 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import SiteHeader from "@/components/site-header";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { withTimeout } from "@/lib/with-timeout";
 
 export const dynamic = "force-dynamic";
 
 export default async function ServicesPage() {
-  const supabase = await createClient();
-  const { data: services } = await supabase.from("site_content").select("id, title, body").eq("page_slug", "services").eq("status", "published").order("sort_order");
+  let services = null;
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = await createClient();
+      const response = await withTimeout(supabase.from("site_content").select("id, title, body").eq("page_slug", "services").eq("status", "published").order("sort_order"));
+      services = response.data;
+    } catch (error) {
+      console.error("Unable to load services:", error);
+    }
+  }
   return <div className="min-h-screen bg-[#fbfaf7]"><SiteHeader/><main><section className="bg-[#173f3b] px-5 py-20 text-[#f7f0df]"><div className="mx-auto max-w-7xl lg:px-8"><p className="text-sm font-bold tracking-[.15em] text-[#d8b66e]">OUR SERVICES</p><h1 className="mt-4 text-4xl font-bold md:text-5xl">為你的品牌，建立更清楚的保障</h1><p className="mt-6 max-w-2xl leading-8 text-stone-300">服務項目可由管理後台的「前台版面」分頁新增、排序、編輯及發布。</p></div></section><section className="mx-auto max-w-7xl px-5 py-16 lg:px-8"><div className="grid gap-6 lg:grid-cols-3">{services?.map((service, index) => <article key={service.id} className="rounded-2xl border border-stone-200 bg-white p-8"><span className="text-sm font-bold text-[#a57a2c]">{String(index + 1).padStart(2, "0")}</span><h2 className="mt-10 text-2xl font-bold text-[#173f3b]">{service.title}</h2><p className="mt-6 flex gap-3 whitespace-pre-line leading-7 text-stone-600"><CheckCircle2 size={18} className="mt-1 shrink-0 text-[#a57a2c]"/>{service.body}</p></article>)}{!services?.length && <p className="col-span-full rounded-2xl border border-dashed border-stone-300 p-10 text-center text-stone-500">尚未發布服務項目。</p>}</div><div className="mt-14 rounded-3xl bg-[#eee8da] p-8 md:flex md:items-center md:justify-between"><div><h2 className="text-2xl font-bold text-[#173f3b]">想先討論你的商標需求？</h2><p className="mt-2 text-stone-600">歡迎聯絡我們，從目前的品牌狀況開始評估。</p></div><Link href="/contact" className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#173f3b] px-6 py-3 font-bold text-white md:mt-0">聯絡諮詢 <ArrowRight size={16}/></Link></div></section></main></div>;
 }
