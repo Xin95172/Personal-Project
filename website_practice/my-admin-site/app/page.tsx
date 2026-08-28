@@ -4,12 +4,10 @@ import SiteHeader from "@/components/site-header";
 import TrademarkSearch from "@/components/trademark-search";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { connection } from "next/server";
 
 const fallbackHero = { title: "商標權益，從清楚的第一步開始", body: "提供商標檢索、申請策略與品牌保護建議，協助你在重要決策前掌握資訊。", cta_label: "了解服務", cta_href: "/services" };
 
 export default async function HomePage() {
-  await connection();
   const configured = isSupabaseConfigured();
   const data = configured
     ? (await (await createClient()).from("site_content").select("title, body, cta_label, cta_href").eq("page_slug", "home").eq("section_key", "hero").eq("status", "published").maybeSingle()).data
