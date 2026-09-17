@@ -1,0 +1,32 @@
+param(
+    [ValidateSet('Debug','Release')][string]$Configuration = 'Debug',
+    [string]$Python = 'python',
+    [switch]$SkipBuild
+)
+$ErrorActionPreference = 'Stop'
+$kit = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10'
+$version = '10.0.28000.0'
+if (-not $SkipBuild) {
+    & $Python (Join-Path $PSScriptRoot 'prepare.py')
+    if ($LASTEXITCODE) { throw 'prepare failed' }
+    & (Join-Path $PSScriptRoot 'build.ps1') -Configuration $Configuration
+}
+$source = Join-Path $PSScriptRoot "build-source\audio\sysvad\TabletAudioSample\x64\$Configuration"
+# A fresh directory prevents stale sample binaries/catalogs entering a package.
+$package = Join-Path $PSScriptRoot ('out\packages\' + $Configuration + '-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $package | Out-Null
+foreach ($file in 'VirMixerAudio.sys','VirMixerAudio.inf') {
+    Copy-Item -LiteralPath (Join-Path $source $file) -Destination $package
+}
+& "$kit\Tools\$version\x64\infverif.exe" /v /u "$package\VirMixerAudio.inf"
+if ($LASTEXITCODE) { throw 'InfVerif failed' }
+& "$kit\bin\$version\x86\Inf2Cat.exe" "/driver:$package" /os:10_CO_X64,10_NI_X64,10_GE_X64 /verbose
+if ($LASTEXITCODE) { throw 'Inf2Cat failed' }
+if (-not (Test-Path "$package\VirMixerAudio.cat")) { throw 'Catalog missing' }
+$hashes = @{}
+Get-ChildItem -LiteralPath $package -File | ForEach-Object { $hashes[$_.Name] = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
+@{ configuration=$Configuration; kit=$version; files=$hashes; signed=$false } | ConvertTo-Json -Depth 4 | Set-Content "$package\manifest.json"
+& $Python (Join-Path $PSScriptRoot 'tests\verify_package.py') $package
+if ($LASTEXITCODE) { throw 'Offline package consistency verification failed' }
+Set-Content (Join-Path $PSScriptRoot "out\latest-package-$Configuration.txt") $package
+Write-Host "Validated unsigned package: $package"

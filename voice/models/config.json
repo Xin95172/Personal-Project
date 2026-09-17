@@ -1,0 +1,6 @@
+{
+  "voice_model": "voice.dynamic.onnx",
+  "contentvec": "vec-768-layer-12.onnx",
+  "sample_rate": 40000,
+  "speaker_id": 0
+}
