@@ -1,5 +1,13 @@
 # Runtime deployment and validation (TEST machine only)
 
+**Current phase, 2026-09-20:** The user reports an installed B RENDERPOS
+diagnostic driver. The earlier “no driver installed” status below is historical.
+New frame-identity experiments require a separately manually deployed probe
+package; this task did not deploy anything. See
+[FRAME_IDENTITY_EXPERIMENT.md](FRAME_IDENTITY_EXPERIMENT.md#exact-next-manual-runtime-commands)
+for the exact 600-second test and offline comparison commands. Do not repeat
+trust/test-signing setup as part of this investigation.
+
 Status: Debug and Release build, Universal API/INF checks and unsigned catalog
 creation pass. No VirMixer driver is installed. None of the system-changing
 commands below have been executed. Runtime correctness is still unproven.

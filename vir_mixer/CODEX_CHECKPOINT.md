@@ -1,5 +1,107 @@
 # VirMixer Codex Checkpoint
 
+## Latest investigation — 2026-09-20, PortAudio capture tail
+
+Read [driver/PORTAUDIO_TAIL_INVESTIGATION.md](driver/PORTAUDIO_TAIL_INVESTIGATION.md)
+first. This supersedes the deployment/status statements below, which are kept
+as history. Verified installed driver: oem44.inf, 18.12.38.209, FrameProbe B,
+signed SYS B2877F187F7D6D540B42F3020759F6BD4CAC8B9FEAEF2C5A5A161D776C865AAB.
+No driver replacement, trust/boot changes or driver core edits this round.
+Prior uncommitted generator/core changes are preserved.
+
+Independent exact audits of both old RAW files confirm +48 then +352 after
+672 delivered frames. Both first jump indices are 320 modulo read size 480.
+PortAudio v19.7.0 blocking WASAPI capture allocates a 512-frame tail for the
+1024-frame endpoint, ignores short ring writes, and releases the whole packet.
+With 160 frames remaining in the read, it must retain 864 but retains only 512:
+352 disappear after 160+512=672 frames. Actual upstream ring regression proves
+this arithmetic and the analogous +32 after 992 case.
+
+Direct WASAPI packet tracing independently shows capture source gaps equal
+device-position gaps, sometimes without any recorded DMA-window clamp.
+The first historical +48 is still not proven: missing packet-position data
+prevents retrospective attribution to scheduler versus capture position/readout.
+Do not claim the entire long-run issue is solved or redesign Shared Timeline.
+
+Project-local pinned PortAudio baseline/fixed build tools and process-only DLL
+selection are in driver/portaudio and driver/tests/portaudio_override.py.
+Fixed tail holds a full endpoint packet and checks short writes. The system
+Python DLL is unchanged. Runtime A/B: controls 2/2 PASS per variant; baseline
+three induced cases show extra +32, fixed four induced cases show no second
+jump but still have upstream loss. One overlapping exclusive-run batch failed
+device open and is explicitly excluded, with logs preserved.
+
+Evidence and commands are in the report. Final candidate validation: new
+600-second exclusive run retains all 28,800,000 frames with zero gaps/reorders/
+invalid words and no transport errors; exclusive restarts 10/10 PASS, shared
+restarts 3/3 PASS. PortAudio fixed Debug/Release builds PASS. Python tests
+26 PASS, native driver tests five PASS, driver Debug/Release 0 warnings/errors,
+source/package verification and diff whitespace checks PASS.
+Long-run report: driver/out/pa-fixed-long600/capture.json. The fix remains
+project-local/opt-in; original Python DLL and installed driver are unchanged.
+
+## Latest runtime — 2026-09-20 18:43, installed RENDERPOS B only
+
+User subsequently authorized direct runtime testing and the driver deployment
+needed for the new experiment. Executed verify_driver.py with --exclusive
+--pre-generate --repeats 1 --seconds 2 --long-seconds 600 on the existing driver.
+PASS: 2-second restart correlation 1.0; 600-second minimum correlation
+0.9999999999999999; pre/post silence peak 0. No reproduction of the persistent
++400-frame skip in this run; this is not proof of a fix or per-frame probe evidence.
+Report: `driver/out/runtime-exclusive-600-20260920-183341.json`; matching `.log`.
+Passing captures are not preserved by this existing harness.
+
+Prepared `driver/out/run-frame-probe-approved.ps1` to sign with the existing
+trusted certificate, update the existing devnode, capture kernel diagnostics,
+then run encoded 2s/600s tests. The UAC elevation attempt returned
+"operation canceled by user"; the elevated helper never started. No signing,
+driver update, trust/boot changes or FrameProbe runtime occurred. Readback
+still ROOT\MEDIA\0003, oem43.inf, 16.49.33.771. Actual FrameProbe testing remains
+pending successful Windows administrator elevation. Do not report it as tested.
+
+## CURRENT — 2026-09-20: Problem 2 identity observer; no fix/deployment
+
+This supersedes the historical CURRENT section below. Shared Timeline B stays
+intact. User reports an installed signed B RENDERPOS diagnostic package and
+long-run +48/+352=+400 source skips; no new live evidence was collected here.
+See [driver/FRAME_IDENTITY_EXPERIMENT.md](driver/FRAME_IDENTITY_EXPERIMENT.md)
+for OBSERVED / PROVEN / HYPOTHESIS, all four boundaries, interpretation limits,
+validation and exact next manual commands.
+
+Authoritative changes: `driver/prepare.py` (preserving its pre-existing dirty
+RENDERPOS/indentation changes), `core/FrameProbe.h`, `core/VirtualCable.h` and
+a read-only, probe-only newest-word accessor in `core/AudioRing.h`.
+`package.ps1` and package/source verification record/check opt-in identity.
+New runtime/offline tool `tests/frame_identity.py`, native fault-injection test
+`tests/frame_probe_test.cpp`, Python identity tests, generation/record-size
+tests and `test-core.ps1` integration. Relevant investigation/runtime notes
+now point to the experiment. Generated stream edits only came from prepare.py.
+
+Build mode: `--shared-timeline --frame-probe`; package uses
+`-Configuration Debug -SharedTimeline -FrameProbe`. Probe is absent from
+Release. No architecture, ring thresholds, recovery, notifications, clocks,
+or normal audio cursor semantics changed. RENDERPOS printing is suppressed
+only while the probe is compiled in. No sign/install/uninstall/reboot/trust/
+test-signing changes and no live audio tests were performed.
+
+Final unsigned Debug B probe package:
+`driver/out/packages/Debug-B-6894cd7cf98f4a94aa033e72303dfdac`.
+SYS SHA256: `66B6D65F99B54B76084554A41B736328469D978502B2A1097D16DED13FFA203C`.
+Manifest: `frameProbe=true`, `sharedTimeline=true`, `signed=false`.
+Generated source manifest SHA256:
+`A854711D3FB40B76C792B21AFED68B7BB22E033CE271B940236704A58D325938`.
+Earlier intermediate probe packages are superseded by this final package.
+
+Final validation: 20 Python tests PASS; all five native test executables PASS;
+generated source invariants PASS; Debug B probe and Release B build both zero
+warnings/errors; ApiValidator/InfVerif/Inf2Cat/package hashes and probe binary
+identity PASS. Release binary was checked to omit FRAME_END. Build logs:
+`driver/out/frame-probe-build.log`, `driver/out/frame-probe-release-build.log`.
+Current generated source remains B with the opt-in Debug probe, and the latest
+Debug B package pointer names the final package above. User must manually
+deploy that new probe before running the experiment; the currently installed
+RENDERPOS-only driver cannot emit the new records.
+
 ## CURRENT — Shared Timeline B implemented; A and B packaged; NOTHING INSTALLED
 
 This supersedes the design-only Outcome B below. Experimental Shared Timeline **B is implemented**, not proven to fix exclusive mode. No live audio/device tests, installation, signing, certificate trust, boot/security changes, reboot or Verifier actions performed.

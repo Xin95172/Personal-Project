@@ -38,7 +38,7 @@ driver_project = read('TabletAudioSample/TabletAudioSample.vcxproj')
 assert '<TargetName>TabletAudioSample</TargetName>' not in driver_project
 assert driver_project.count('<TargetName>VirMixerAudio</TargetName>') == 4
 assert read('TabletAudioSample/VirMixerAudio.inx') == (root / 'package/VirMixerAudio.inx').read_text(encoding='utf-8')
-for header in ['AudioRing.h', 'VirtualCable.h', 'StreamTrace.h', 'CableTimeline.h']:
+for header in ['AudioRing.h', 'VirtualCable.h', 'StreamTrace.h', 'CableTimeline.h', 'FrameProbe.h']:
     assert read(header) == (root / 'core' / header).read_text(encoding='utf-8')
 endpoints_project = read('EndpointsCommon/EndpointsCommon.vcxproj')
 debug_group = re.search(r'<ItemDefinitionGroup Condition="\'\$\(Configuration\)\|\$\(Platform\)\'==\'Debug\|x64\'">(.*?)</ItemDefinitionGroup>', endpoints_project, re.S)

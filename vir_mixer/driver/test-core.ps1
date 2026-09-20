@@ -48,3 +48,14 @@ if ($Zig) {
 if ($LASTEXITCODE) { throw 'B wrapper compilation failed.' }
 & $kernelTimelineOutput
 if ($LASTEXITCODE) { throw 'B wrapper tests failed.' }
+
+$probeSource = Join-Path $PSScriptRoot 'tests\frame_probe_test.cpp'
+$probeOutput = Join-Path $PSScriptRoot 'out\frame_probe_test.exe'
+if ($Zig) {
+    & $Zig c++ -std=c++17 -Wall -Wextra -Werror "-I$traceStubs" $probeSource -o $probeOutput
+} else {
+    & cl.exe /nologo /std:c++17 /EHsc /W4 /WX /D_CRT_SECURE_NO_WARNINGS "/I$traceStubs" $probeSource "/Fe:$probeOutput" "/Fo:$probeOutput.obj"
+}
+if ($LASTEXITCODE) { throw 'Frame probe compilation failed.' }
+& $probeOutput
+if ($LASTEXITCODE) { throw 'Frame probe tests failed.' }

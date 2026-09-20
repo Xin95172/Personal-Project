@@ -1,5 +1,12 @@
 # Shared Cable Timeline Prototype v1 — design checkpoint
 
+**2026-09-20 update:** B remains enabled for the current investigation; the
+user reports successful restart validation and a separate long-run source
+skip. The older installation/runtime status below is historical. See
+[FRAME_IDENTITY_EXPERIMENT.md](FRAME_IDENTITY_EXPERIMENT.md) for the new
+opt-in boundary observer. Absolute mapping, 960-frame latency and production
+timeline/ring semantics are unchanged.
+
 ## Current implementation status (supersedes design-only text below)
 
 Experimental Shared Timeline B is implemented and offline validated. A remains the default generator mode; B requires `prepare.py --shared-timeline` or `package.ps1 -SharedTimeline`. Final package paths/SHA256 and validation are recorded in the CURRENT section of `../CODEX_CHECKPOINT.md`. Both Debug packages passed build, ApiValidator, INF/catalog and mode/hash checks. **NOTHING INSTALLED. Next step is manual strict runtime A/B.**

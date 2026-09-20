@@ -1,5 +1,25 @@
 # Exclusive-mode intermittent underrun investigation
 
+## Latest — capture delivery and PortAudio tail truncation
+
+See [PORTAUDIO_TAIL_INVESTIGATION.md](PORTAUDIO_TAIL_INVESTIGATION.md) for
+independent exact audits of both +48/+352 captures, direct WASAPI packet
+evidence, a deterministic reproduction of the 672-frame spacing, and a
+project-local client dependency patch/A-B test. The installed baseline is now
+oem44 (FrameProbe), not the older oem43 described in historical sections.
+Shared Timeline and the driver were not modified in this investigation.
+The first +48 remains distinct from the proven tail-truncation mechanism.
+
+## Current phase — 2026-09-20: Problem 2 boundary identity experiment
+
+The FIFO timeline-identity problem is already addressed by Shared Timeline B;
+do not treat the historical investigation below as the current failure.
+User reports repeated long-run +48 then +352 source-frame skips. A separate
+176-frame DMA expiry does not match that event. The new opt-in Debug observer,
+ranked hypotheses, limitations, outcome matrix and manual commands are in
+[FRAME_IDENTITY_EXPERIMENT.md](FRAME_IDENTITY_EXPERIMENT.md). No speculative
+fix or driver deployment was performed in this phase.
+
 ## Current investigation: stream timing, 2026-09-17
 
 This section supersedes the earlier cable-only diagnostic instructions below. **No root-cause fix or driver installation was performed.** The new package is instrumentation only. AudioRing capacity (19,200 bytes), PrimeBytes (3,840 bytes), Continue recovery, reset placement, notification decisions, test thresholds and sleeps are unchanged.

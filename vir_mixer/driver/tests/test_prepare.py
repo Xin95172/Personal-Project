@@ -9,6 +9,25 @@ import unittest
 
 
 class PrepareTests(unittest.TestCase):
+    def test_frame_probe_is_explicit_debug_b_only(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory(prefix='virmixer-probe-') as temp:
+            destination = Path(temp) / 'generated'
+            command = [sys.executable, str(root / 'prepare.py'), '--output-dir', str(destination), '--frame-probe']
+            rejected = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(rejected.returncode, 0)
+            result = subprocess.run(command + ['--shared-timeline'], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for relative in ('EndpointsCommon/EndpointsCommon.vcxproj', 'TabletAudioSample/TabletAudioSample.vcxproj'):
+                content = (destination / 'audio/sysvad' / relative).read_text()
+                self.assertEqual(content.count('VIRMIXER_FRAME_PROBE=1'), 1)
+            stream = (destination / 'audio/sysvad/EndpointsCommon/minwavertstream.cpp').read_text()
+            update = stream[stream.index('VOID CMiniportWaveRTStream::UpdatePosition'):]
+            self.assertLess(update.index('->ProbeDma(false,'), update.index('ReadBytes(ByteDisplacement'))
+            self.assertGreater(update.index('->ProbeDma(true,'), update.index('WriteBytes(ByteDisplacement'))
+            self.assertLess(update.index('->ProbeDma(true,'), update.index('m_ullLinearPosition += ByteDisplacement'))
+            self.assertIn('!VIRMIXER_FRAME_PROBE && m_ulNotificationsPerBuffer > 0', update)
+
     def test_explicit_ab_generation_mode(self):
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory(prefix='virmixer-ab-') as temp:

@@ -17,6 +17,19 @@ def replace_once(text, old, new):
     return text.replace(old, new, 1)
 
 
+def format_stream_indentation(text):
+    """Keep injected capture calls aligned without altering local diagnostics."""
+    return (text.replace(
+        '                    m_pMiniport->GetAdapterCommObj()\n'
+        '                        ->GetVirtualCable()\n'
+        '                        ->Read(m_pDmaBuffer + bufferOffset, runWrite);',
+        '            m_pMiniport->GetAdapterCommObj()\n'
+        '                ->GetVirtualCable()\n'
+        '                ->Read(m_pDmaBuffer + bufferOffset, runWrite);')
+        .replace('                UNREFERENCED_PARAMETER(cableActual);',
+                 '        UNREFERENCED_PARAMETER(cableActual);'))
+
+
 def array_body(text, name, body):
     match = re.search(r'\b' + re.escape(name) + r'\[\]\s*=\s*\{', text)
     if not match:
@@ -66,9 +79,12 @@ FORMAT = '''    {
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--shared-timeline', action='store_true', help='Generate experimental B; default is baseline A')
+    parser.add_argument('--frame-probe', action='store_true', help='Debug-only encoded PCM boundary observer (requires B)')
     parser.add_argument('--refresh-generated', action='store_true', help='Replace generated source files; preserve your edits elsewhere first')
     parser.add_argument('--output-dir', type=Path, help='Optional generation directory for reproducibility checks')
     args = parser.parse_args()
+    if args.frame_probe and not args.shared_timeline:
+        parser.error('--frame-probe requires --shared-timeline')
     upstream = ROOT / 'upstream'
     if not upstream.exists():
         subprocess.run(['git', 'clone', '--filter=blob:none', '--no-checkout',
@@ -92,7 +108,7 @@ def main():
     base = destination / 'audio' / 'sysvad'
     shutil.copytree(upstream / 'audio' / 'sysvad', base, dirs_exist_ok=True)
     shutil.copy2(upstream / 'LICENSE', destination / 'LICENSE-Microsoft')
-    for header in ('AudioRing.h', 'VirtualCable.h', 'StreamTrace.h', 'CableTimeline.h'):
+    for header in ('AudioRing.h', 'VirtualCable.h', 'StreamTrace.h', 'CableTimeline.h', 'FrameProbe.h'):
         shutil.copy2(ROOT / 'core' / header, base / header)
 
     def edit(relative, transform):
@@ -175,8 +191,55 @@ def main():
             m_hnsElapsedTimeCarryForward, m_ullLinearPosition, ByteDisplacement,
             m_ulDmaBufferSize, m_ulNotificationIntervalMs, m_ulNotificationsPerBuffer,
             m_KsState, diagnosticOrigin, m_bEoSReceived);''')
-        for call in ('WriteBytes(ByteDisplacement);', 'ReadBytes(ByteDisplacement);'):
-            s = replace_once(s, '        ' + call, position + '        ' + call)
+
+        render_position = debug('''        if (m_ulNotificationsPerBuffer > 0)
+        {
+            const LONG dmaRead =
+                static_cast<LONG>(m_ullWritePosition % m_ulDmaBufferSize);
+
+            const LONG osWrite =
+                static_cast<LONG>(m_ulCurrentWritePosition);
+
+            LONG distance = osWrite - dmaRead;
+
+            const LONG halfBuffer =
+                static_cast<LONG>(m_ulDmaBufferSize / 2);
+
+            if (distance > halfBuffer)
+            {
+                distance -= static_cast<LONG>(m_ulDmaBufferSize);
+            }
+            else if (distance < -halfBuffer)
+            {
+                distance += static_cast<LONG>(m_ulDmaBufferSize);
+            }
+
+            DPF(D_TERSE, (
+                "VirMixer: RENDERPOS qpc=%lld linear=%llu dmaRead=%ld osWrite=%ld "
+                "distance=%ld disp=%lu dmaSize=%lu packet=%lld lastOsWrite=%lu",
+                ilQPC.QuadPart,
+                m_ullLinearPosition,
+                dmaRead,
+                osWrite,
+                distance,
+                ByteDisplacement,
+                m_ulDmaBufferSize,
+                m_llPacketCounter,
+                m_ulLastOsWritePacket
+            ));
+        }''')
+
+        s = replace_once(
+            s,
+            '        WriteBytes(ByteDisplacement);',
+            position + '        WriteBytes(ByteDisplacement);'
+        )
+
+        s = replace_once(
+            s,
+            '        ReadBytes(ByteDisplacement);',
+            position + render_position + '        ReadBytes(ByteDisplacement);'
+        )
         s = replace_once(s, '    _In_ LARGE_INTEGER ilQPC\n)', '    _In_ LARGE_INTEGER ilQPC,\n    _In_ ULONG diagnosticOrigin\n)')
         if s.count('UpdatePosition(ilQPC);') != 2:
             raise ValueError('Expected GetPosition and GetPacketCount update sites')
@@ -226,10 +289,32 @@ def main():
 #else
 ''' + old_write + '\n#endif')
         s = s.replace('        ByteDisplacement -= runWrite;', '        ByteDisplacement -= runWrite;' + timeline('        cableLinear += runWrite;'))
+        # Diagnostic mode only. Keep the existing RENDERPOS path for normal B,
+        # but avoid callback printing while the bounded identity probe is active.
+        s = s.replace('        if (m_ulNotificationsPerBuffer > 0)\n        {\n            const LONG dmaRead',
+                      '        if (!VIRMIXER_FRAME_PROBE && m_ulNotificationsPerBuffer > 0)\n        {\n            const LONG dmaRead')
+        probe_context = '''
+#if VIRMIXER_FRAME_PROBE
+        m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->ProbeContext(m_bCapture,
+            {static_cast<ULONGLONG>(ilQPC.QuadPart), m_ullLinearPosition,
+             static_cast<ULONGLONG>(m_llPacketCounter), ByteDisplacement,
+             m_ulDmaBufferSize, m_ulCurrentWritePosition, m_ulLastOsWritePacket, diagnosticOrigin});
+#endif
+'''
+        for helper, capture in (('ReadBytes', False), ('WriteBytes', True)):
+            call = helper + '(ByteDisplacement\n#if VIRMIXER_SHARED_TIMELINE\n            , cableToken\n#endif\n        );'
+            observe = '''
+#if VIRMIXER_FRAME_PROBE
+        m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->ProbeDma(''' + str(capture).lower() + ''',
+            cableToken, m_ullLinearPosition, ByteDisplacement, m_pDmaBuffer, m_ulDmaBufferSize);
+#endif
+'''
+            s = replace_once(s, '        ' + call,
+                             probe_context + ('        ' + call + observe if capture else observe + '        ' + call))
         return (s.replace('Write sine wave to buffer.', 'Copy cable PCM (or silence) to capture buffer.')
                 .replace('This function writes the audio buffer using a sine wave generator', 'This function fills capture DMA from the PCM cable, padding underruns with silence.')
                 .replace('This function reads the audio buffer and saves the data in a file.', 'This function routes render DMA into the PCM cable.'))
-    edit('EndpointsCommon/minwavertstream.cpp', stream)
+    edit('EndpointsCommon/minwavertstream.cpp', lambda s: format_stream_indentation(stream(s)))
     edit('EndpointsCommon/minwavertstream.h', lambda s: replace_once(s,
         '        _In_ LARGE_INTEGER ilQPC\n', '        _In_ LARGE_INTEGER ilQPC,\n        _In_ ULONG diagnosticOrigin = 4\n')
         .replace('#include "savedata.h"', '#include "savedata.h"\n#include "VirtualCable.h"')
@@ -293,7 +378,7 @@ def main():
                 r'<ClCompile>.*?<PreprocessorDefinitions>)'
                 r'([^<]*)'
                 r'(</PreprocessorDefinitions>)', re.S)
-            s, replacements = pattern.subn(r'\1\2;VIRMIXER_DIAGNOSTICS=1\3', s, count=1)
+            s, replacements = pattern.subn(r'\1\2;VIRMIXER_DIAGNOSTICS=1;VIRMIXER_FRAME_PROBE=' + str(int(args.frame_probe)) + r'\3', s, count=1)
             if replacements != 1:
                 raise ValueError('Expected Debug x64 compiler definitions: ' + relative)
             s = s.replace('<PreprocessorDefinitions>%(PreprocessorDefinitions);',
@@ -305,10 +390,10 @@ def main():
     paths = [Path('audio/sysvad') / p.relative_to(upstream / 'audio/sysvad')
              for p in (upstream / 'audio/sysvad').rglob('*') if p.is_file()]
     paths += [Path(p) for p in ['LICENSE-Microsoft', 'UPSTREAM.txt', 'audio/sysvad/AudioRing.h',
-              'audio/sysvad/VirtualCable.h', 'audio/sysvad/StreamTrace.h', 'audio/sysvad/CableTimeline.h', 'audio/sysvad/TabletAudioSample/VirMixerAudio.inx']]
+              'audio/sysvad/VirtualCable.h', 'audio/sysvad/StreamTrace.h', 'audio/sysvad/CableTimeline.h', 'audio/sysvad/FrameProbe.h', 'audio/sysvad/TabletAudioSample/VirMixerAudio.inx']]
     manifest_path.write_text(json.dumps({p.as_posix(): hashlib.sha256((destination / p).read_bytes()).hexdigest()
                                         for p in paths}, indent=2), encoding='utf-8')
-    (destination / '.virmixer-mode.json').write_text(json.dumps({'mode': 'B' if args.shared_timeline else 'A'}), encoding='utf-8')
+    (destination / '.virmixer-mode.json').write_text(json.dumps({'mode': 'B' if args.shared_timeline else 'A', 'frameProbe': args.frame_probe}), encoding='utf-8')
     print(f'Generated source: {base}\nGeneration only; compile with driver/build.ps1. No driver installed.')
 
 

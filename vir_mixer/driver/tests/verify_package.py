@@ -21,6 +21,7 @@ def verify(package):
     assert '$KMDFVERSION$' not in inf
     assert 'TabletAudioSample.sys' not in inf
     binary = (package / 'VirMixerAudio.sys').read_bytes()
+    assert (b'VirMixer: FRAME_END ' in binary) == bool(manifest.get('frameProbe')), 'SYS frame probe identity mismatch'
     if manifest.get('mode') in ('A','B') and manifest['configuration']=='Debug':
         assert (b'VirMixer: TIMELINE ' in binary) == (manifest['mode']=='B'), 'SYS A/B identity mismatch'
     assert binary[:2] == b'MZ'

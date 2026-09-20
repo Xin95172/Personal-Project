@@ -44,6 +44,14 @@ class AudioRing {
     unsigned long long oversized_dropped_ = 0;
 
 public:
+#if defined(VIRMIXER_FRAME_PROBE) && VIRMIXER_FRAME_PROBE
+    unsigned ProbeNewestWord() const {
+        if(count_<4) return 0;
+        const size_t tail=(read_+count_-4)%Capacity;
+        return bytes_[tail] | (unsigned(bytes_[(tail+1)%Capacity])<<8)
+            | (unsigned(bytes_[(tail+2)%Capacity])<<16) | (unsigned(bytes_[(tail+3)%Capacity])<<24);
+    }
+#endif
     void Reset() {
         read_ = 0;
         count_ = 0;

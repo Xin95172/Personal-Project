@@ -68,10 +68,10 @@ class StreamTimingTests(unittest.TestCase):
     def test_prints_fit_kernel_record_limit(self):
         source = (Path(__file__).resolve().parents[1] / 'core/VirtualCable.h').read_text()
         formats = re.findall(r'"(VirMixer:[^"\n]+)"', source)
-        self.assertEqual(len(formats), 9)
+        self.assertEqual(len(formats), 11)
         self.assertTrue(any(fmt.startswith('VirMixer: POSHIST ') for fmt in formats))
         for fmt in formats:
-            worst = fmt.replace('%llu', '9' * 20).replace('%u', '9' * 10).replace('\\n', '\n')
+            worst = fmt.replace('%llu', '9' * 20).replace('%lld', '-' + '9' * 19).replace('%u', '9' * 10).replace('\\n', '\n')
             self.assertLess(len(worst) + 1, 512, fmt)
 
     def test_early_notification_and_double_boundary(self):

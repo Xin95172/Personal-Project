@@ -9,9 +9,14 @@
 #include "StreamTrace.h"
 #endif
 
+#include "FrameProbe.h"
+
 class VirtualCable {
     KSPIN_LOCK lock_;
     AudioRing<19200, 3840> ring_;
+#if VIRMIXER_FRAME_PROBE
+    FrameProbe probe_;
+#endif
 #if VIRMIXER_SHARED_TIMELINE
     using Timeline = CableTimeline<4800,960,false>;
     Timeline timeline_{ring_};
@@ -58,6 +63,30 @@ class VirtualCable {
 #endif
 public:
     using TransferToken = CableTimeline<4800,960,false>::Token;
+#if VIRMIXER_FRAME_PROBE
+    void ProbeContext(bool capture, FrameProbe::Context context) {
+        KIRQL irql; KeAcquireSpinLock(&lock_, &irql);
+        probe_.context[capture?1:0]=context;
+        KeReleaseSpinLock(&lock_,irql);
+    }
+    // Independent traversal of the retained DMA window; outside Read/WriteBytes.
+    void ProbeDma(bool capture, TransferToken token, long long linear,
+                  ULONG bytes, const BYTE* dma, ULONG size) {
+        if(!size) return;
+        KIRQL irql; KeAcquireSpinLock(&lock_, &irql);
+        const auto current=timeline_.BeginTransfer();
+        if(current.epoch==token.epoch && current.generation==token.generation) {
+            const auto& b=bindings_[capture?1:0];
+            const ULONG skip=bytes>size?bytes-size:0;
+            const auto base=Timeline::MapLinearByteToFrame(b.frame,b.linear,linear+skip)-(capture?960:0);
+            const unsigned stage=capture?3:0;
+            probe_.Begin(stage);
+            for(ULONG i=skip;i<bytes;i+=4)
+                probe_.Observe(stage,base+(i-skip)/4,FrameProbe::Word(dma+(linear+i)%size));
+        }
+        KeReleaseSpinLock(&lock_,irql);
+    }
+#endif
 #if VIRMIXER_SHARED_TIMELINE
     TransferToken BeginTransfer(bool capture) {
         KIRQL irql; KeAcquireSpinLock(&lock_, &irql);
@@ -95,8 +124,17 @@ public:
         if(timeline_.Validate(token)) {
             const auto& b=bindings_[0];
             const auto frame=Timeline::MapLinearByteToFrame(b.frame,b.linear,linear);
+#if VIRMIXER_FRAME_PROBE
+            probe_.Begin(1);
+#endif
             for(ULONG i=0;i<bytes/4;++i) {
-                if(timeline_.WriteFrame(token,frame+i,reinterpret_cast<const short*>(data+i*4))) committed+=4;
+                if(timeline_.WriteFrame(token,frame+i,reinterpret_cast<const short*>(data+i*4))) {
+                    committed+=4;
+#if VIRMIXER_FRAME_PROBE
+                    // Observe the bytes actually copied, not a second DMA read.
+                    probe_.Observe(1,frame+i,ring_.ProbeNewestWord());
+#endif
+                }
             }
         }
 #if defined(VIRMIXER_DIAGNOSTICS) && VIRMIXER_DIAGNOSTICS
@@ -117,9 +155,15 @@ public:
             ULONG startup=0;
             const auto& b=bindings_[1];
             const auto first=Timeline::CaptureSourceFrame(Timeline::MapLinearByteToFrame(b.frame,b.linear,linear));
+#if VIRMIXER_FRAME_PROBE
+            probe_.Begin(2);
+#endif
             for(ULONG i=0;i<bytes/4;++i) {
                 if(first+i<0) startup+=4;
                 else if(timeline_.ReadFrame(token,first+i,reinterpret_cast<short*>(data+i*4))) actual+=4;
+#if VIRMIXER_FRAME_PROBE
+                probe_.Observe(2,first+i,FrameProbe::Word(data+i*4));
+#endif
             }
             const auto prefill=(ring_.PrefillWaitCount()-prefillBefore)*4;
             timelineStartup_+=startup; timelinePrefill_+=prefill;
@@ -152,6 +196,9 @@ private:
 #endif
 #if VIRMIXER_SHARED_TIMELINE
         timeline_.Reset();
+#if VIRMIXER_FRAME_PROBE
+        probe_.ResetEpoch(timeline_.BeginTransfer().epoch);
+#endif
 #else
         ring_.Reset();
 #endif
@@ -291,6 +338,27 @@ public:
     // in the streaming path; drain at PASSIVE_LEVEL only after BOTH sides STOP.
     void FlushStopped() {
         if(KeGetCurrentIrql()!=PASSIVE_LEVEL) return;
+#if VIRMIXER_FRAME_PROBE
+        for(unsigned n=0;n<FrameProbe::Capacity+1;++n) {
+            FrameProbe::Event e;
+            KIRQL irql; KeAcquireSpinLock(&lock_, &irql);
+            if(trace_.streams[0].state || trace_.streams[1].state) { KeReleaseSpinLock(&lock_,irql); return; }
+            const bool have=probe_.Pop(e);
+            const auto trigger=probe_.trigger;
+            const auto sequence=probe_.sequence;
+            const auto a=probe_.observed[0],b=probe_.observed[1],c=probe_.observed[2],d=probe_.observed[3];
+            const bool frozen=probe_.frozen;
+            if(!have) probe_.ClearDrained();
+            KeReleaseSpinLock(&lock_,irql);
+            if(!have) {
+                DbgPrintEx(DPFLTR_IHVDRIVER_ID,DPFLTR_ERROR_LEVEL,"VirMixer: FRAME_END seq=%llu trigger=%llu frozen=%u observed0=%llu observed1=%llu observed2=%llu observed3=%llu\n",sequence,trigger,unsigned(frozen),a,b,c,d);
+                break;
+            }
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID,DPFLTR_ERROR_LEVEL,
+                "VirMixer: FRAME seq=%llu epoch=%llu stage=%u frame=%lld word=%u offset=%lld reason=%u qpc=%llu linear=%llu disp=%u dma=%u packet=%llu osWrite=%u lastPacket=%u origin=%u\n",
+                e.sequence,e.epoch,e.stage,e.frame,e.word,e.offset,e.reason,e.context.qpc,e.context.linear,e.context.disp,e.context.dma,e.context.packet,e.context.osWrite,e.context.lastPacket,e.context.origin);
+        }
+#endif
         for(unsigned n=0;n<StreamTrace::Capacity+1;++n) {
             StreamTraceEvent e;
             KIRQL irql; KeAcquireSpinLock(&lock_, &irql);
