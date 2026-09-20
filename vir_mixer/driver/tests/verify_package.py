@@ -21,6 +21,8 @@ def verify(package):
     assert '$KMDFVERSION$' not in inf
     assert 'TabletAudioSample.sys' not in inf
     binary = (package / 'VirMixerAudio.sys').read_bytes()
+    if manifest.get('mode') in ('A','B') and manifest['configuration']=='Debug':
+        assert (b'VirMixer: TIMELINE ' in binary) == (manifest['mode']=='B'), 'SYS A/B identity mismatch'
     assert binary[:2] == b'MZ'
     pe = struct.unpack_from('<I', binary, 0x3c)[0]
     assert binary[pe:pe+4] == b'PE\0\0'

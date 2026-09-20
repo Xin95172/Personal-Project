@@ -65,6 +65,7 @@ FORMAT = '''    {
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--shared-timeline', action='store_true', help='Generate experimental B; default is baseline A')
     parser.add_argument('--refresh-generated', action='store_true', help='Replace generated source files; preserve your edits elsewhere first')
     parser.add_argument('--output-dir', type=Path, help='Optional generation directory for reproducibility checks')
     args = parser.parse_args()
@@ -91,7 +92,7 @@ def main():
     base = destination / 'audio' / 'sysvad'
     shutil.copytree(upstream / 'audio' / 'sysvad', base, dirs_exist_ok=True)
     shutil.copy2(upstream / 'LICENSE', destination / 'LICENSE-Microsoft')
-    for header in ('AudioRing.h', 'VirtualCable.h'):
+    for header in ('AudioRing.h', 'VirtualCable.h', 'StreamTrace.h', 'CableTimeline.h'):
         shutil.copy2(ROOT / 'core' / header, base / header)
 
     def edit(relative, transform):
@@ -128,8 +129,15 @@ def main():
         pWfEx->nAvgBytesPerSec != 192000)
         return STATUS_NOT_SUPPORTED;
     m_ulDmaMovementRate = pWfEx->nAvgBytesPerSec;''')
-        s = replace_once(s, '            m_ToneGenerator.GenerateSine(m_pDmaBuffer + bufferOffset, runWrite);',
-            '        m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->Read(m_pDmaBuffer + bufferOffset, runWrite);')
+        s = replace_once(
+            s,
+            '            m_ToneGenerator.GenerateSine(m_pDmaBuffer + bufferOffset, runWrite);',
+            '''        const ULONG cableActual =
+                    m_pMiniport->GetAdapterCommObj()
+                        ->GetVirtualCable()
+                        ->Read(m_pDmaBuffer + bufferOffset, runWrite);
+                UNREFERENCED_PARAMETER(cableActual);'''
+        )
         s = replace_once(s, '        m_SaveData.WriteData(m_pDmaBuffer + bufferOffset, runWrite);',
             '        m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->Write(m_pDmaBuffer + bufferOffset, runWrite);')
         s = replace_once(s, '''        if (!g_DoNotCreateDataFiles)
@@ -145,10 +153,87 @@ def main():
         s = replace_once(s, '    switch (State_)', '''    if (State_ != m_KsState)
         m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->Reset();
     switch (State_)''')
+        def debug(code):
+            return '\n#if defined(VIRMIXER_DIAGNOSTICS) && VIRMIXER_DIAGNOSTICS\n' + code + '\n#endif\n'
+        s = replace_once(s, '    if (State_ != m_KsState)', debug('''    const auto diagnosticOldState = m_KsState;
+    m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->State(m_bCapture, m_KsState, State_, false,
+        reinterpret_cast<ULONG_PTR>(this), 0, 0);''') + '    if (State_ != m_KsState)')
+        s = replace_once(s, '    m_KsState = State_;', '    m_KsState = State_;' + debug('''    m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->State(m_bCapture, diagnosticOldState, State_, true,
+        reinterpret_cast<ULONG_PTR>(this), 0, 0);
+    if (State_ == KSSTATE_STOP) m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->FlushStopped();'''))
+        anchor = '            m_ullLastDPCTimeStamp = m_ullDmaTimeStamp = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, ullPerfCounterTemp);'
+        s = replace_once(s, anchor, anchor + debug('''            m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->RunClock(m_bCapture,
+                ullPerfCounterTemp.QuadPart, m_ullPerformanceCounterFrequency.QuadPart,
+                m_ullDmaTimeStamp, m_ullLinearPosition, m_hnsElapsedTimeCarryForward);'''))
+        s = replace_once(s, '\n    qpc = KeQueryPerformanceCounter(&qpcFrequency);',
+            '\n    qpc = KeQueryPerformanceCounter(&qpcFrequency);' + debug('''    _this->m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->Timer(_this->m_bCapture,
+        qpc.QuadPart, _this->m_hnsDPCTimeCarryForward);'''))
+        marker = 'VOID CMiniportWaveRTStream::UpdatePosition\n(\n    _In_ LARGE_INTEGER ilQPC\n)\n{'
+        s = replace_once(s, marker, marker + '\n    UNREFERENCED_PARAMETER(diagnosticOrigin);' + debug('    const auto diagnosticCarryIn = m_hnsElapsedTimeCarryForward;'))
+        position = debug('''        m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->Position(m_bCapture,
+            ilQPC.QuadPart, m_ullDmaTimeStamp, hnsCurrentTime, diagnosticCarryIn,
+            m_hnsElapsedTimeCarryForward, m_ullLinearPosition, ByteDisplacement,
+            m_ulDmaBufferSize, m_ulNotificationIntervalMs, m_ulNotificationsPerBuffer,
+            m_KsState, diagnosticOrigin, m_bEoSReceived);''')
+        for call in ('WriteBytes(ByteDisplacement);', 'ReadBytes(ByteDisplacement);'):
+            s = replace_once(s, '        ' + call, position + '        ' + call)
+        s = replace_once(s, '    _In_ LARGE_INTEGER ilQPC\n)', '    _In_ LARGE_INTEGER ilQPC,\n    _In_ ULONG diagnosticOrigin\n)')
+        if s.count('UpdatePosition(ilQPC);') != 2:
+            raise ValueError('Expected GetPosition and GetPacketCount update sites')
+        s = s.replace('UpdatePosition(ilQPC);', 'UpdatePosition(ilQPC, 1);', 1)
+        s = s.replace('UpdatePosition(ilQPC);', 'UpdatePosition(ilQPC, 2);', 1)
+        s = replace_once(s, '_this->UpdatePosition(qpc);', '_this->UpdatePosition(qpc, 3);')
+        s = replace_once(s, '    BOOL bufferCompleted = FALSE;', '    BOOL bufferCompleted = FALSE;' + debug('    ULONG diagnosticSignals = 0;'))
+        s = replace_once(s, '            KeSetEvent(nleCurrent->NotificationEvent, 0, 0);',
+            '            KeSetEvent(nleCurrent->NotificationEvent, 0, 0);' + debug('            ++diagnosticSignals;'))
+        s = replace_once(s, 'End:\n    KeReleaseSpinLock(&_this->m_PositionSpinLock, oldIrql);', 'End:' + debug('''    _this->m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->Notification(_this->m_bCapture,
+        qpc.QuadPart, TimeElapsedInMS, bufferCompleted, _this->m_hnsDPCTimeCarryForward,
+        _this->m_ullLinearPosition, _this->m_llPacketCounter, diagnosticSignals,
+        _this->m_ulCurrentWritePosition, static_cast<ULONG>(_this->m_ullWritePosition),
+        _this->m_ulDmaBufferSize, _this->m_ulNotificationsPerBuffer);''') + '    KeReleaseSpinLock(&_this->m_PositionSpinLock, oldIrql);')
+        def timeline(code):
+            return '\n#if VIRMIXER_SHARED_TIMELINE\n' + code + '\n#endif\n'
+        s = replace_once(s, '    UNREFERENCED_PARAMETER(diagnosticOrigin);',
+            timeline('    const auto cableToken = m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->BeginTransfer(m_bCapture);') + '    UNREFERENCED_PARAMETER(diagnosticOrigin);')
+        s = replace_once(s, '        m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->Reset();', '''    {
+#if VIRMIXER_SHARED_TIMELINE
+        m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->TimelineTransition(m_bCapture);
+#else
+        m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->Reset();
+#endif
+    }''')
+        s = replace_once(s, anchor, anchor + timeline('''            m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->TimelineRun(m_bCapture,
+                ullPerfCounterTemp.QuadPart, m_ullPerformanceCounterFrequency.QuadPart, m_ullLinearPosition);'''))
+        for helper in ('ReadBytes', 'WriteBytes'):
+            s = replace_once(s, helper+'(ByteDisplacement);', helper+'(ByteDisplacement\n#if VIRMIXER_SHARED_TIMELINE\n            , cableToken\n#endif\n        );')
+        s = s.replace('    _In_ ULONG ByteDisplacement\n)', '    _In_ ULONG ByteDisplacement\n#if VIRMIXER_SHARED_TIMELINE\n    , VirtualCable::TransferToken cableToken\n#endif\n)')
+        prefix = '    const ULONG skipped = ByteDisplacement > m_ulDmaBufferSize ? ByteDisplacement - m_ulDmaBufferSize : 0;'
+        s = s.replace(prefix, timeline('''    if (!m_bCapture) m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->ExpireRender(
+        cableToken, m_ullLinearPosition, ByteDisplacement, m_ulDmaBufferSize);''') + prefix + timeline('    ULONGLONG cableLinear = m_ullLinearPosition + skipped;'))
+        old_read = '''        const ULONG cableActual =
+                    m_pMiniport->GetAdapterCommObj()
+                        ->GetVirtualCable()
+                        ->Read(m_pDmaBuffer + bufferOffset, runWrite);'''
+        s = replace_once(s, old_read, '''#if VIRMIXER_SHARED_TIMELINE
+        const ULONG cableActual = m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->ReadAt(
+            cableToken, cableLinear, m_pDmaBuffer + bufferOffset, runWrite);
+#else
+''' + old_read + '\n#endif')
+        old_write = '        m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->Write(m_pDmaBuffer + bufferOffset, runWrite);'
+        s = replace_once(s, old_write, '''#if VIRMIXER_SHARED_TIMELINE
+        m_pMiniport->GetAdapterCommObj()->GetVirtualCable()->WriteAt(
+            cableToken, cableLinear, m_pDmaBuffer + bufferOffset, runWrite);
+#else
+''' + old_write + '\n#endif')
+        s = s.replace('        ByteDisplacement -= runWrite;', '        ByteDisplacement -= runWrite;' + timeline('        cableLinear += runWrite;'))
         return (s.replace('Write sine wave to buffer.', 'Copy cable PCM (or silence) to capture buffer.')
                 .replace('This function writes the audio buffer using a sine wave generator', 'This function fills capture DMA from the PCM cable, padding underruns with silence.')
                 .replace('This function reads the audio buffer and saves the data in a file.', 'This function routes render DMA into the PCM cable.'))
     edit('EndpointsCommon/minwavertstream.cpp', stream)
+    edit('EndpointsCommon/minwavertstream.h', lambda s: replace_once(s,
+        '        _In_ LARGE_INTEGER ilQPC\n', '        _In_ LARGE_INTEGER ilQPC,\n        _In_ ULONG diagnosticOrigin = 4\n')
+        .replace('#include "savedata.h"', '#include "savedata.h"\n#include "VirtualCable.h"')
+        .replace('        _In_ ULONG ByteDisplacement\n', '        _In_ ULONG ByteDisplacement\n#if VIRMIXER_SHARED_TIMELINE\n        , VirtualCable::TransferToken cableToken\n#endif\n'))
     edit('EndpointsCommon/MiniportAudioEngineNode.cpp', guard_optional_sideband)
 
     def pairs(s):
@@ -201,6 +286,18 @@ def main():
                 if s.count('<TargetName>TabletAudioSample</TargetName>') != 4:
                     raise ValueError('Expected four upstream TargetName configuration overrides')
                 s = s.replace('<TargetName>TabletAudioSample</TargetName>', '<TargetName>VirMixerAudio</TargetName>')
+            # Both translation-unit groups must agree on VirtualCable layout.
+            # Release has neither trace storage nor trace calls.
+            pattern = re.compile(
+                r'(<ItemDefinitionGroup Condition="\'\$\(Configuration\)\|\$\(Platform\)\'==\'Debug\|x64\'">.*?'
+                r'<ClCompile>.*?<PreprocessorDefinitions>)'
+                r'([^<]*)'
+                r'(</PreprocessorDefinitions>)', re.S)
+            s, replacements = pattern.subn(r'\1\2;VIRMIXER_DIAGNOSTICS=1\3', s, count=1)
+            if replacements != 1:
+                raise ValueError('Expected Debug x64 compiler definitions: ' + relative)
+            s = s.replace('<PreprocessorDefinitions>%(PreprocessorDefinitions);',
+                '<PreprocessorDefinitions>%(PreprocessorDefinitions);VIRMIXER_SHARED_TIMELINE=' + str(int(args.shared_timeline)) + ';')
             return s
         edit(relative, project)
     shutil.copy2(ROOT / 'package' / 'VirMixerAudio.inx', base / 'TabletAudioSample' / 'VirMixerAudio.inx')
@@ -208,9 +305,10 @@ def main():
     paths = [Path('audio/sysvad') / p.relative_to(upstream / 'audio/sysvad')
              for p in (upstream / 'audio/sysvad').rglob('*') if p.is_file()]
     paths += [Path(p) for p in ['LICENSE-Microsoft', 'UPSTREAM.txt', 'audio/sysvad/AudioRing.h',
-              'audio/sysvad/VirtualCable.h', 'audio/sysvad/TabletAudioSample/VirMixerAudio.inx']]
+              'audio/sysvad/VirtualCable.h', 'audio/sysvad/StreamTrace.h', 'audio/sysvad/CableTimeline.h', 'audio/sysvad/TabletAudioSample/VirMixerAudio.inx']]
     manifest_path.write_text(json.dumps({p.as_posix(): hashlib.sha256((destination / p).read_bytes()).hexdigest()
                                         for p in paths}, indent=2), encoding='utf-8')
+    (destination / '.virmixer-mode.json').write_text(json.dumps({'mode': 'B' if args.shared_timeline else 'A'}), encoding='utf-8')
     print(f'Generated source: {base}\nGeneration only; compile with driver/build.ps1. No driver installed.')
 
 

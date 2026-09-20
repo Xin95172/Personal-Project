@@ -9,6 +9,20 @@ import unittest
 
 
 class PrepareTests(unittest.TestCase):
+    def test_explicit_ab_generation_mode(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory(prefix='virmixer-ab-') as temp:
+            destination = Path(temp) / 'generated'
+            command = [sys.executable, str(root / 'prepare.py'), '--output-dir', str(destination)]
+            for mode, options in [('A', []), ('B', ['--shared-timeline']), ('A', [])]:
+                result = subprocess.run(command + options, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads((destination / '.virmixer-mode.json').read_text())['mode'], mode)
+                for relative in ('EndpointsCommon/EndpointsCommon.vcxproj','TabletAudioSample/TabletAudioSample.vcxproj'):
+                    text = (destination / 'audio/sysvad' / relative).read_text()
+                    self.assertIn('VIRMIXER_SHARED_TIMELINE=' + str(int(mode == 'B')), text)
+                    self.assertNotIn('VIRMIXER_SHARED_TIMELINE=' + str(int(mode != 'B')), text)
+
     def test_repeat_generation_and_local_edit_protection(self):
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory(prefix='virmixer-generation-') as temp:

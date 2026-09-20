@@ -1,5 +1,126 @@
 # VirMixer Codex Checkpoint
 
+## CURRENT — Shared Timeline B implemented; A and B packaged; NOTHING INSTALLED
+
+This supersedes the design-only Outcome B below. Experimental Shared Timeline **B is implemented**, not proven to fix exclusive mode. No live audio/device tests, installation, signing, certificate trust, boot/security changes, reboot or Verifier actions performed.
+
+Implementation:
+- `driver/core/CableTimeline.h`: frame tags, fixed 960-frame delay, shared-frame helpers, DMA-expired prefix coverage, epoch/generation tokens and stale rejection. Portable tests may own PCM; kernel specialization `<4800,960,false>` references the existing AudioRing and has no second PCM array.
+- `driver/core/AudioRing.h`: frame-aligned DiscardOldest, separate explicit-discard/overflow-drop/oversized-input-drop counters. Existing Read/Write, priming and Continue behavior retained. OverflowDropped counts previously accepted queue data; OversizedInputDropped counts offered input excluded from the existing TotalBytesWritten definition.
+- `driver/core/VirtualCable.h`: adapter shared QPC anchor, per-side RUN frame/linear binding, token capture/validation, exact WriteAt/ReadAt, reset/rebind invalidation under existing spin lock. No stored stream pointers/waits under lock. Capture holes remain zero; future PCM is retained; old PCM explicitly discarded. Actual copy counters preserved. B stop summary `VirMixer: TIMELINE` separates startup, missing-source, prefill and rejected-token silence, with expired-frame/stale counts. No POSHIST/event storage growth.
+- `driver/prepare.py`: `--shared-timeline` selects B; default A. Copies CableTimeline.h and generates all tokens, helpers, state hooks and consistent project defines. ReadBytes is render, WriteBytes capture; original WaveRT position math and notification decisions remain. B uses actual DMA size; 4096 bytes means newest 1024 frames survive. Absolute helper offsets advance across wrap, and repeated intervals cannot be committed twice.
+- `driver/package.ps1`: `-SharedTimeline`; separate A/B directory names, mode/latest pointers and manifests; records generated-source manifest hash. Debug package verifier checks SYS marker against mode, preventing a mislabeled A/B binary.
+- Tests changed/added: `cable_timeline_test.cpp`, `cable_timeline_kernel_test.cpp`, `test_prepare.py`, `test_stream_timing.py`, `verify_source.py`, `verify_package.py`, and `driver/test-core.ps1`. StreamTrace.h itself unchanged this implementation stage.
+
+Validation: actual test-core.ps1 PASS (200,000 ring operations, old timeline mapping/scheduler tests, new <=1024/>1024/30ms/100ms DMA-hole and recovery tests, reset/rebind stale write/read/segment tests, explicit discard accounting, actual Debug B VirtualCable under user-mode stubs including unequal RUN/nonzero baseline and no duplicated PCM). 16 driver Python tests PASS, including A→B→A generation. Source invariants PASS for both generated modes. Debug A and Debug B each compile/link with 0 warnings/0 errors, ApiValidator Universal, InfVerif, Inf2Cat and package/hash/Debug mode-marker checks PASS. `git diff --check` PASS. Release not built in this stage. Kernel scheduling/performance and shared/exclusive runtime behavior remain UNTESTED.
+
+Final unsigned packages (NOT INSTALLED):
+
+| Mode | Path under `driver/out/packages/` | SYS SHA256 |
+|---|---|---|
+| A | `Debug-A-c92bf10cd3704b0e8c0f73e329aa157d` | `0E8EE459CE914BDBE248B0F4EA4FB0E8482F5E83DAC2CA8C6C7ACDCDB003956B` |
+| B | `Debug-B-92fa342b05b840849cb829709aaf19ee` | `4413386F0AF1A02FFBE3D069DE8AF680ADA25D154788D086B8922A85D63709E4` |
+
+Logs: `driver/out/timeline-A-build.log`, `driver/out/timeline-B-build.log`. `latest-package-Debug-A.txt` and `latest-package-Debug-B.txt` identify these packages. Current build-source and generic latest-package-Debug.txt are **B**. Do not accidentally regenerate default A when intending B; package.ps1 -SharedTimeline passes the generation switch correctly.
+
+Rebuild offline from project root:
+```powershell
+& ./driver/package.ps1 -Configuration Debug -Python C:\Users\UUU\anaconda3\envs\xin\python.exe
+& ./driver/package.ps1 -Configuration Debug -SharedTimeline -Python C:\Users\UUU\anaconda3\envs\xin\python.exe
+```
+
+Next step: **manual A/B runtime test**, following existing driver/RUNTIME_TESTING.md signing/install safeguards in a separately authorized stage. Use identical strict seeds/thresholds and shared/exclusive runs, preserve captures, compare mid/late zero insertions; do not use underrun count alone. Run `verify_driver.py --run --exclusive --pre-generate --repeats 100 --report driver/out/timeline-A-exclusive.json` after A, then B with a separate report; omit --exclusive for shared mode. Roll back using the identified A package, not a repository reset. B's ring-call counts differ from A because exact-frame reads bypass the FIFO for holes; use the new TIMELINE byte totals for output silence. Older unlimited-DMA scheduler tests are mathematical models, not evidence of real DMA recovery. No offline build/test blocker remains; root-cause/runtime success is not claimed.
+
+## Latest stage — Shared Cable Timeline Prototype v1: Outcome B
+
+Completed the user-authorized design-checkpoint alternative. **No shared-timeline runtime implementation or installation.** Read `driver/SHARED_TIMELINE_PROTOTYPE.md` first; it contains exact ownership/state, frame mapping, render/capture algorithms, epoch protocol, generator injection anchors, invariants, failure cases, tests and A/B/rollback plan.
+
+Reason: current FIFO lacks absolute source-frame identity after DMA skips/reset. Simply withholding 20 ms or advancing by cableActual would not provide coherent absolute catch-up. A safe implementation needs tagged PCM plus explicit discard accounting and tokenized state transitions. Do not mistake the design for implemented code or a proven fix.
+
+Source review confirms existing AudioRing read cursor already consumes actual only; VirtualCable::Read returns ULONG actual and capture's generated cableActual is observability only. Current capture copied totals now count actual PCM. User's new POSHIST/runtime findings are carried forward; independent timers remain a hypothesis, not sole proven cause.
+
+This stage changed only: new prototype design MD, this checkpoint, `driver/tests/verify_source.py` (recognize current multiline cableActual call/return type), `driver/tests/test_stream_timing.py` (include eighth POSHIST print format without weakening 512-byte bound). Runtime authority files were left unchanged; their hashes are in the design MD. Existing dirty work was preserved.
+
+Validation: prepare PASS; source verification PASS; 15 driver Python tests PASS; actual native script PASS including 200,000 ring operations and wrapper tests; 16 fake-output/offscreen app tests PASS. Debug baseline compile/link 0 warnings/0 errors, ApiValidator Universal, InfVerif/Inf2Cat/package verification PASS. Initial two failures were stale test assumptions, fixed above. No new runtime test or Release rebuild this stage.
+
+Packaged **baseline A, not prototype B**: `driver/out/packages/Debug-6d04a6a7c958413c9a296e3d684302b1`; SYS SHA256 `0615435D0F872B557474AB8E8778812573303EDA920A591E64A26C49CA2B9E62`. Unsigned, NOT installed. `latest-package-Debug.txt` now identifies this baseline. Build log: `driver/out/shared-timeline-design-baseline-build.log`.
+
+Stop here per requested stage boundary. Next engineering session implements the portable tagged-frame model/tests before kernel hooks and A/B packages. No signing/install commands for B are valid yet because B does not exist. No boot/security/certificate/Driver Store/Verifier changes made. No runtime rollback required. Preserve old captures/reports and strict thresholds.
+
+## 2026-09-17 — stream timing instrumentation complete; STOP before installation
+
+Current task supersedes the cable-only phase below. User explicitly requested instrumentation and safe validation only, with no root-cause fix and no installation.
+
+**OBSERVED:** Reparsed `driver/out/DESKTOP-ILPET6O.log`: 71/71 underruns primed=1, epochReq>epochW, epochRead==epochW; lead 11.6667–23 ms, median20. Supplied bounded restart run is 85/100 PASS. The log has no new stream timing events.
+
+**PROVEN:** Actual ring shortages occur. The cumulative request lead includes prefill silence, so it does not itself measure instantaneous stream-clock lead. Generated source has separate RUN anchors on the same QPC timebase, integer-ms notification gates, elapsed-time DMA advancement with carried remainder, and a DMA-window clamp. Reset is locked but precedes state-specific timer cancellation. Whether those source mechanisms cause these failures is unproven.
+
+**HYPOTHESIS:** RUN/first-callback phase, delayed displacement bursts, notification/packet-boundary mismatch, cumulative accounting, or state/reset ordering. Do not implement shared-clock redesign based on suspicion.
+
+Completed authoritative source changes:
+- `driver/core/StreamTrace.h`: fixed 64-event paired stream snapshots with overflow reporting.
+- `driver/core/VirtualCable.h`: records QPC/anchors/carries/displacement/timer cadence, run and epoch totals, prefill versus shortage bytes, state/reset ordering, cross-epoch transfers, actual notifications and packet-boundary movement. Flush only after both STOP at PASSIVE with no position/cable lock held. Existing AudioRing semantics/counters unchanged in this phase.
+- `driver/prepare.py`: generates all hooks; same diagnostic define in **both** Debug x64 projects (class layout consistency), none in Release. Generated minwavertstream.cpp is not authoritative.
+- Tests/parser: `driver/tests/parse_stream_timing.py`, `test_stream_timing.py`, `cable_trace_test.cpp`, `kernel_stubs/ntddk.h`; extended `ring_test.cpp`, `verify_source.py`, `driver/test-core.ps1`. Cable-only parser wording corrected to avoid claiming clock cause from cumulative lead.
+- Reference comparison and interpretation contract: `driver/EXCLUSIVE_MODE_INVESTIGATION.md` (current section). MicDeck reviewed at `4ec7e53c0ac37291187d92f3d75bf88af469895c`: master-clock object exists, but the reviewed DPC uses stream-local clock_.LinearBytes(); do not treat file existence as proof of synchronization. Microsoft #255 is relevant motivation, not a verified fix.
+
+Validation: 15 driver Python tests PASS; source invariants PASS; native 200,000 ring operations and bounded trace tests PASS; actual wrapper with user-mode kernel stubs PASS, synthetic log has 16 complete snapshots/no integrity errors. Earlier same-task fake-output/offscreen app regression 16/16 PASS. Debug and Release build/package checks PASS (ApiValidator, InfVerif, Inf2Cat, hashes). TRACE/NOTIFY strings present only in Debug. No new-driver runtime test performed.
+
+Current packages (unsigned, NOT installed):
+- Debug `driver/out/packages/Debug-1feed427b2da4808b8fb2d5ff9123dd4`, SYS SHA256 `cf87fb7f6ab9080d3221c652429baca1f0ba17d415ca42950aa4a118c68cd565`.
+- Release `driver/out/packages/Release-28e7bbdae12b4f6e84bfd9397e1eeb44`, SYS SHA256 `2d3b5e88664f18c36917e0597a403f323da505751bc8a806bb1c833f70367e96`.
+- Logs `driver/out/stream-timing-debug-build.log`, `driver/out/stream-timing-release-build.log`.
+
+Next task, only after user authorizes installation: install the exact Debug package following existing runtime safeguards; capture deferred trace while running unchanged strict exclusive pre-generated restarts to `runtime-exclusive-stream-timing.json`; parse copied log with `parse_stream_timing.py`. Check loss/incomplete records first. Distinguish synthetic tests from runtime results. Preserve the old report/log. Do not change capacity, PrimeBytes, thresholds, sleeps or recovery. No system changes were made in this phase. CODEX_HANDOFF.md was absent.
+
+## 2026-09-17 — exclusive-mode investigation in progress
+
+User supplied runtime evidence from an installed test driver. Treat this as a new active task that supersedes the earlier “not installed” runtime status below.
+
+### Observed
+- Shared-mode strict PCM/restart/silence run previously passed 10/10.
+- Exclusive `--pre-generate --repeats 100` in Continue mode failed 11/100. Failed raw captures are in `driver/out/diagnostics/`.
+- Offline analysis of the failed captures found real all-zero insertions: most are exactly 48 frames (1 ms), with an earlier 768-frame case. PCM resumes after the inserted gap, producing both correlation and gain loss. This is not a test threshold issue.
+- Existing kernel logs recorded actual partial `AudioRing` reads while `primed=1`; no corresponding overflow was reported in that run. Continue did not fix the fault, so Reprime is not the primary cause.
+
+### Current conclusion
+PROVEN: capture can request more PCM than the ring contains; the strict harness observes the resulting zero fill.
+
+NOT PROVEN: independent render/capture timers are the root cause. They remain the leading hypothesis, along with a transient state/reset ordering issue or stream position/accounting error. Do not change capacity, PrimeBytes, correlation threshold, sleeps or recovery semantics as a supposed fix.
+
+### New source work (safe, complete)
+- `driver/core/AudioRing.h`: retained both recovery modes; added lifetime and per-reset-epoch written/requested/actual-read counters plus reset count. These counters are updated under the existing cable lock.
+- `driver/core/VirtualCable.h`: moved `DbgPrintEx` after releasing the cable spin lock; it is enabled only in Debug x64 with `VIRMIXER_DIAGNOSTICS=1`. It emits a bounded sample per reset epoch (first 16, then powers of two) and includes reset/count/request/available/taken/primed/lifetime/epoch totals. Release has no debug-print hot path.
+- `driver/prepare.py`: durably adds the diagnostic compile define only to `EndpointsCommon` Debug x64; regeneration preserves the design.
+- `driver/tests/ring_test.cpp`: validates new counters and keeps 200,000 randomized operations practical by using a linear-time oracle while retaining an explicit production-capacity overflow check.
+- `driver/tests/verify_source.py`: verifies generated debug-only define, no release define, and unlock-before-print layout.
+- `driver/tests/parse_cable_diagnostics.py` and `test_parse_cable_diagnostics.py`: parser/classifier for copied DbgView output; 3 tests pass.
+- `driver/EXCLUSIVE_MODE_INVESTIGATION.md`: observed/inferred distinction, new log format and next evidence collection steps.
+
+### Latest safe validation
+- `prepare.py --refresh-generated`: PASS.
+- `verify_source.py`: PASS.
+- `test_prepare.py -v`: PASS.
+- `test_verify_driver.py -v`: PASS.
+- `test_parse_cable_diagnostics.py -v`: PASS.
+- `test-core.ps1 -Zig ...`: PASS, 200,000 randomized operations.
+- Debug x64 build: PASS, 0 warnings/0 errors, ApiValidator Universal. Log: `driver/out/logs/12-bounded-diagnostics-debug-build.log`.
+- Debug and Release `package.ps1`: PASS, InfVerif/Inf2Cat errors none/warnings none, package hash check PASS. Logs: `13-exclusive-diagnostics-debug-package.log`, `14-exclusive-diagnostics-release-package.log`.
+- Debug package: `driver/out/packages/Debug-a682668779fc4d4aa60c2aa02bc6ddd3`; Debug SYS SHA256 `C982826A4E0E0BD897821D5C18A36182F20A63B607361A1C65FEE815D22D5EC9`.
+- Release package: `driver/out/packages/Release-4f0a2c75c5f9482f892d5c84a9fcfb9d`.
+
+### First blocker / next required action
+The new diagnostic Debug package is not installed. To obtain the evidence needed before an architectural fix, it must replace the installed test driver and the strict exclusive 100-restart harness must be run while capturing DbgView output. That changes the installed kernel driver/Driver Store and may require a restart; do not do it without explicit user approval. No system configuration, certificate, driver installation, reboot or Verifier action was performed in this investigation turn.
+
+After approval, follow `driver/RUNTIME_TESTING.md` signing/install safeguards, install only the current Debug package, collect a copied debug log, and run:
+
+```powershell
+& 'C:\Users\UUU\anaconda3\envs\xin\python.exe' driver/tests/verify_driver.py --run --exclusive --pre-generate --repeats 100 --report driver/out/runtime-exclusive-bounded-diagnostics.json
+& 'C:\Users\UUU\anaconda3\envs\xin\python.exe' driver/tests/parse_cable_diagnostics.py C:\path\to\virmixer-debug.log
+```
+
+If results show `epochRead > epochWritten`, audit accounting immediately. If they show `epochReq > epochWritten` without a reset and actual reads do not exceed writes, collect stream timing evidence before deciding whether a shared clock/producer-driven architecture is required.
+
 ## 最後更新／當前階段
 2026-09-17，Asia/Taipei。安裝前準備已完成；停在使用者明確指定的 Windows 系統變更批准邊界。
 專案：C:\Users\UUU\Documents\GitHub\Personal-Project\vir_mixer。

@@ -1,6 +1,6 @@
 # Audio Mixer · File Console
 
-自研虛擬聲卡開發原型位於 `driver/`；請先閱讀 `driver/README.md`。
+完整系統架構請先閱讀 [VIRMIXER_ARCHITECTURE.md](VIRMIXER_ARCHITECTURE.md)。自研虛擬聲卡開發原型位於 `driver/`；請先閱讀 `driver/README.md`。
 Debug / Release x64 驅動、INF / catalog / 套件驗證已通過；尚未簽章／安裝或驗證核心音訊通路。安裝準備、PCM 測試與回復方式見 `driver/RUNTIME_TESTING.md`。
 
 獨立的多音檔混音台，位於 `vir_mixer`，不匯入或修改旁邊的 `voice` / RVC 專案。
