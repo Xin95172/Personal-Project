@@ -1,7 +1,0 @@
-upstream/
-build-source/
-out/
-*.pfx
-*.cer
-*.cat
-*.sys

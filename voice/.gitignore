@@ -1,4 +1,0 @@
-models/*.onnx
-models/*.pth
-models/*.index
-.venv/
